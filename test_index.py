@@ -1,9 +1,32 @@
 import torch
+import os
 
 from pymolgrid import grid_maker
 from pymolgrid.pymol import write_grid_to_dx_file
 from rdkit import Chem
 import time
+
+os.system('mkdir -p result_index')
+save_dir = 'result_index'
+
+def run_test(gmaker, coords, center, atom_labels, radii, random_translation = 0.0, random_rotation = False) :
+    dims = gmaker.grid_dimension(17)
+    out = torch.empty(dims)
+    gmaker.forward_index(coords, center, atom_labels, radii, random_translation, random_rotation, out=out)
+    return out
+
+def save_dx(out, center, resolution, prefix) :
+    for idx, label in zip([6,7,8,15], ['C','N','O','P']) :
+        write_grid_to_dx_file(f'{save_dir}/{prefix}_{label}.dx', out[idx], center, resolution)
+
+def save_mol(mol, coords, prefix) :
+    mol = Chem.Mol(mol)
+    conformer = mol.GetConformer()
+    for i in range(mol.GetNumAtoms()) :
+        conformer.SetAtomPosition(i, coords[i].tolist())
+    w = Chem.PDBWriter(f'{save_dir}/{prefix}.pdb')
+    w.write(mol)
+    w.close()
 
 DATA = './1n4k/complex_ligand_pocket.pdb'
 
@@ -21,56 +44,55 @@ atom_radii[100:] = 2.0
 
 init_coords, init_center, init_atom_labels = coords.clone(), center.clone(), atom_labels.clone()
 
-def run_test(gmaker, coords, center, atom_labels, radii, random_translation = 0.0, random_rotation = False) :
-    dims = gmaker.grid_dimension(17)
-    out = torch.empty(dims)
-    st = time.time()
-    gmaker.forward_index(coords, center, atom_labels, radii, random_translation, random_rotation, out=out)
-    end = time.time()
-    print(f'time per mol: {(end-st):.3f}')
-    nochange =  ((coords - init_coords).abs().sum().item() < 1e-12) & \
-                ((center - init_center).abs().sum().item() < 1e-12) & \
-                ((atom_labels - init_atom_labels).abs().sum().item() < 1e-12)
-    return out
-
-resolution = 0.3
-dimension = 64
-gmaker = grid_maker.GridMaker(resolution, dimension)
 print('Test 1: Binary: False, Raddi-Type-Index: False, Density: Mixed')
-print('Test 1-1: No random transform')
-ref_out = gmaker.forward_index(coords, center, atom_labels, radii=1.0)
-for label in [6, 7, 8, 15] :
-    write_grid_to_dx_file(f'dx_index/ref_{label}.dx', ref_out[label], center, resolution)
+resolution, dimension = 0.5, 48
+gmaker = grid_maker.GridMaker(resolution, dimension)
+out = gmaker.forward_index(coords, center, atom_labels, radii=1.0)
+save_dx(out, center, resolution, 'ref')
+save_mol(mol, coords, 'ref')
 
-for _ in range(10) :
-    out = run_test(gmaker, coords, center, atom_labels, 1.0)
-    assert (out - ref_out).abs().sum().item() < 1e-12
+print('Test 2: High Resolution')
+gmaker_hr = grid_maker.GridMaker(0.3, 64)
+hr_out = run_test(gmaker_hr, coords, center, atom_labels, 1.0)
+save_dx(hr_out, center, 0.3, 'hr')
 
-print('Test 1-2: Random translation')
-out = run_test(gmaker, coords, center, atom_labels, 1.0, random_translation = 1.0)
-
-print('Test 1-3: Random rotation')
-out = run_test(gmaker, coords, center, atom_labels, 1.0, random_rotation = True)
-
-print('Test 1-3: Random transform')
-out = run_test(gmaker, coords, center, atom_labels, 1.0, random_translation = 1.0, random_rotation = True)
-
-print('Test 1-4: With Atom-wise Radii')
+print('Test 3: With Atom-wise Radii')
 out = run_test(gmaker, coords, center, atom_labels, atom_radii)
+save_dx(out, center, resolution, 'test3')
 
-print('Test 2: Binary: True, Radii-Type-Index: False')
+print('Test 4: Binary: True, Radii-Type-Index: False')
 gmaker.set_binary(True)
 out = run_test(gmaker, coords, center, atom_labels, 1.0)
+save_dx(out, center, resolution, 'test4')
 
-print('Test 3: Binary: True, Raddi-Type-Index: True')
+print('Test 5: Binary: True, Raddi-Type-Index: True')
 gmaker.set_binary(True)
 gmaker.set_radii_type_indexed(True)
 out = run_test(gmaker, coords, center, atom_labels, type_radii)
+save_dx(out, center, resolution, 'test5')
 
-print('Test 4: Binary: False, Raddi-Type-Index: False, Density: Gaussian')
-gmaker = grid_maker.GridMaker(resolution, dimension, gaussian_radius_multiple=-1.5)
-out = run_test(gmaker, coords, center, atom_labels, 1.0)
+print('Test 6: Binary: False, Raddi-Type-Index: False, Density: Gaussian')
+gmaker_gaus = grid_maker.GridMaker(gaussian_radius_multiple=-1.5)
+out = run_test(gmaker_gaus, coords, center, atom_labels, 1.0)
+save_dx(out, center, resolution, 'test6')
 
-print('Test 5: Check Block Size Affect')
-grid_maker.BLOCKDIM = 48
-gmaker = grid_maker.GridMaker(resolution, dimension)
+gmaker.set_binary(False)
+gmaker.set_radii_type_indexed(False)
+
+print('Test 7-1: Random translation')
+new_coords = gmaker.do_transform(coords, center, random_translation=1.0)
+out = run_test(gmaker, new_coords, center, atom_labels, 1.0)
+save_dx(out, center, resolution, 'test7-1')
+save_mol(mol, new_coords, 'test7-1')
+
+print('Test 7-2: Random rotation')
+new_coords = gmaker.do_transform(coords, center, random_rotation=True)
+out = run_test(gmaker, new_coords, center, atom_labels, 1.0)
+save_dx(out, center, resolution, 'test7-2')
+save_mol(mol, new_coords, 'test7-2')
+
+print('Test 7-3: Random transform')
+new_coords = gmaker.do_transform(coords, center, random_translation=1.0, random_rotation=True)
+out = run_test(gmaker, new_coords, center, atom_labels, 1.0)
+save_dx(out, center, resolution, 'test7-3')
+save_mol(mol, new_coords, 'test7-3')

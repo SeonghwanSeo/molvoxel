@@ -3,8 +3,8 @@ import torch
 import torch.nn.functional as F
 import itertools
 
-from torch import Tensor, FloatTensor, LongTensor
-from typing import Tuple, Union, Optional
+from torch import Tensor, FloatTensor, LongTensor, BoolTensor
+from typing import Tuple, Union, Optional, Dict, List
 
 from .transform import Transform
 
@@ -15,42 +15,6 @@ radii: input value of molgrid
 atom_radii: radii * radius_scale                            # scaled radii
 atom_size: radii * radius_scale * final_radius_multiple     # atom point cloud boundary
 """
-
-def _get_overlap(
-    coords: FloatTensor,                        # (V, 3)
-    atom_size: Union[float, FloatTensor],       # (V,) or scalar
-    lower_bound: Union[float, FloatTensor],     # (1, 3) or scalar
-    upper_bound: Union[float, FloatTensor],     # (1, 3) or scalar
-) -> LongTensor:
-    device = coords.device
-    if isinstance(lower_bound, Tensor) :
-        lower_bound.to(device)
-    if isinstance(upper_bound, Tensor) :
-        upper_bound.to(device)
-    if isinstance(atom_size, Tensor) and atom_size.dim() == 1:
-        atom_size = atom_size.unsqueeze(1)
-    lb_mask = torch.less(coords + atom_size, lower_bound).sum(dim=-1)       # (V,)
-    ub_mask = torch.greater(coords - atom_size, upper_bound).sum(dim=-1)    # (V,)
-    mask = lb_mask.add_(ub_mask)                                            # (V,)
-    return torch.where(mask==0)
-
-class _GridBox() :
-    def __init__(self, x_axis: FloatTensor, y_axis: FloatTensor, z_axis: FloatTensor) :
-        self.grid = grid = torch.stack(torch.meshgrid([x_axis, y_axis, z_axis], indexing='ij'), dim=-1)
-                                                                        # (BLOCKDIM, BLOCKDIM, BLOCKDIM, 3)
-        self.lower_bound = torch.clone(grid[0,0,0]).unsqueeze(0)        # (1, 3)
-        self.upper_bound = torch.clone(grid[-1,-1,-1]).unsqueeze(0)     # (1, 3)
-
-    def get_overlap(
-        self,
-        coords: FloatTensor,
-        atom_size: Union[float, FloatTensor],
-    ) -> LongTensor :
-        device = coords.device
-        return _get_overlap(coords, atom_size, self.lower_bound, self.upper_bound)
-
-    def spatial_grid_dimension(self) -> Tuple[int, int, int] :
-        return tuple(self.box.size())
 
 class GridMaker() :
     def __init__(
@@ -78,12 +42,12 @@ class GridMaker() :
         self.gaussian_radius_multiple = grm
         self.final_radius_multiple = final_radius_multiple
 
-        self.A = math.exp(-2 * grm**2) * (4 * grm**2)                   # d^2/r^2
-        self.B = -1 * math.exp(-2 * grm**2) * (4 * grm + 8 * grm**3)    # d/r
-        self.C = math.exp(-2*grm**2)*(4*grm**4 + 4*grm**2 + 1)          # constant
+        self.A = math.exp(-2 * grm**2) * (4 * grm**2)                       # d^2/r^2
+        self.B = -1 * math.exp(-2 * grm**2) * (4 * grm + 8 * grm**3)        # d/r
+        self.C = math.exp(-2*grm**2)*(4*grm**4 + 4*grm**2 + 1)              # constant
 
-        #self.D = 8 * grm**2 * math.exp(-2 * grm**2)                     # d/r^2
-        #self.E = - (4 * grm + 8 * grm**3) * math.exp(-2 * grm**2)       # 1/r
+        #self.D = 8 * grm**2 * math.exp(-2 * grm**2)                         # d/r^2
+        #self.E = - (4 * grm + 8 * grm**3) * math.exp(-2 * grm**2)           # 1/r
         self.D = 2 * self.A
         self.E = self.B
 
@@ -94,16 +58,18 @@ class GridMaker() :
         self.lower_bound = -1 * self.upper_bound
 
         self.num_blocks = num_blocks = math.ceil(dimension / BLOCKDIM)
-        self.grid_box_dict = {}
-        axis = torch.arange(dimension, dtype=torch.float) * resolution - (width / 2.)
-        for xidx in range(num_blocks) :
+        self.grid_block_dict: Dict[Tuple[int,int,int], FloatTensor] = {}
+        self.axis = axis = torch.arange(dimension, dtype=torch.float) * resolution - (width / 2.)
+        for xidx, yidx, zidx in itertools.product(range(self.num_blocks), repeat=3) :
             x_axis = axis[xidx*BLOCKDIM : (xidx+1)*BLOCKDIM]
-            for yidx in range(num_blocks) :
-                y_axis = axis[yidx*BLOCKDIM : (yidx+1)*BLOCKDIM]
-                for zidx in range(num_blocks) :
-                    z_axis = axis[zidx*BLOCKDIM : (zidx+1)*BLOCKDIM]
-                    self.grid_box_dict[(xidx, yidx, zidx)] = _GridBox(x_axis, y_axis, z_axis)
+            y_axis = axis[yidx*BLOCKDIM : (yidx+1)*BLOCKDIM]
+            z_axis = axis[zidx*BLOCKDIM : (zidx+1)*BLOCKDIM]
+            grid_block = torch.stack(torch.meshgrid([x_axis, y_axis, z_axis], indexing='ij'), dim=-1)
+            self.grid_block_dict[(xidx, yidx, zidx)] = grid_block
 
+        self.bounds = [(axis[idx*BLOCKDIM].item() + (resolution / 2.))
+                                            for idx in range(1, num_blocks)]
+            
     def spatial_grid_dimension(self) -> Tuple[int, int, int] :
         return (self.dimension, self.dimension, self.dimension)
     def grid_dimension(self, ntypes: int) -> Tuple[int, int, int, int] :
@@ -131,6 +97,10 @@ class GridMaker() :
     def get_binary(self) -> bool:
         return self.binary
 
+    @staticmethod
+    def do_transform(coords, center, random_translation=0.0, random_rotation:bool = False) -> FloatTensor:
+        return Transform.do_transform(coords, center, random_translation, random_rotation)
+
     # Vector
     def forward_vector(
         self,
@@ -155,9 +125,6 @@ class GridMaker() :
         self._check_vector_args(coords, type_vector, radii, out)
         C = type_vector.size(1)
         D = H = W = self.dimension
-        
-        if out is None :
-            out = torch.empty((C, D, H, W), device=coords.device)
 
         coords = coords - center.unsqueeze(0)
         coords = self.do_transform(coords, None, random_translation, random_rotation)
@@ -169,25 +136,32 @@ class GridMaker() :
             atom_size = atom_radii * self.final_radius_multiple
 
         # Clipping Overlapped Atoms
-        mask = _get_overlap(coords, atom_size, self.lower_bound, self.upper_bound)
-        coords, type_vector = coords[mask], type_vector[mask]
+        box_overlap = self._get_overlap(coords, atom_size)
+        coords, type_vector = coords[box_overlap], type_vector[box_overlap]
         if isinstance(atom_radii, Tensor) and not self.radii_type_indexed:
-            atom_radii = atom_radii[mask]
-            atom_size = atom_size[mask]
+            atom_radii = atom_radii[box_overlap]
+            atom_size = atom_radii * self.final_radius_multiple
+        block_overlap_dict = self._get_overlap_blocks(coords, atom_size)
         
         # Run
-        for xidx in range(self.num_blocks) :
-            start_x = xidx * BLOCKDIM
-            end_x = start_x + BLOCKDIM
-            for yidx in range(self.num_blocks) :
-                start_y = yidx * BLOCKDIM
-                end_y = start_y + BLOCKDIM
-                for zidx in range(self.num_blocks) :
-                    start_z = zidx * BLOCKDIM
-                    end_z = start_z + BLOCKDIM
-                    out_box = out[:, start_x:end_x, start_y:end_y, start_z:end_z]
-                    grid_box = self.grid_box_dict[(xidx, yidx, zidx)]
-                    self._set_atoms_vector(coords, type_vector, atom_radii, atom_size, grid_box, out_box)
+        _out = torch.empty((D, H, W, C), device=coords.device)
+        for xidx, yidx, zidx in itertools.product(range(self.num_blocks), repeat=3) :
+            start_x, end_x = xidx*BLOCKDIM, (xidx+1)*BLOCKDIM
+            start_y, end_y = yidx*BLOCKDIM, (yidx+1)*BLOCKDIM
+            start_z, end_z = zidx*BLOCKDIM, (zidx+1)*BLOCKDIM
+
+            grid_block = self.grid_block_dict[(xidx, yidx, zidx)]
+            overlap = block_overlap_dict[(xidx, yidx, zidx)]
+            coords_block, type_vector_block = coords[overlap], type_vector[overlap]
+            atom_radii_block = atom_radii[overlap] if not self.radii_type_indexed and isinstance(atom_radii, Tensor) \
+                                                   else atom_radii
+            out_block = _out[start_x:end_x, start_y:end_y, start_z:end_z]
+            self._set_atoms_vector(coords_block, type_vector_block, atom_radii_block, grid_block, out_block)
+        
+        if out is None :
+            out = _out.permute(3,0,1,2)
+        else :
+            out[:] = _out.permute(3,0,1,2)
 
         return out
 
@@ -213,42 +187,31 @@ class GridMaker() :
         coords: FloatTensor,
         type_vector: FloatTensor,
         atom_radii: Union[float, FloatTensor],
-        atom_size: Union[float, FloatTensor],
-        grid_box: _GridBox,
-        out_box: FloatTensor,
+        grid: FloatTensor,
+        out: FloatTensor,
     ) -> FloatTensor :
         """
         coords: (V, 3)
         type_vector: (V, C)
         atom_radii: scalar or (V, ) or (C, )
-        atom_size: scalar or (V, )
-        grid_box:
-            grid: (D, H, W, 3)
-            lower_bound: (1, 3)
-            upper_bound: (1, 3)
+        grid: (D, H, W, 3)
 
-        out_box: (C, D, H, W)
+        out: (D, H, W, C)
         """
-        D, H, W = grid_box.grid.size()[:-1]
-        device = coords.device
-
-        mask = grid_box.get_overlap(coords, atom_size)
-        coords, type_vector = coords[mask], type_vector[mask]
-        if not self.radii_type_indexed :
-            atom_radii = atom_radii[mask] if isinstance(atom_radii, Tensor) else atom_radii
-
         if self.radii_type_indexed :
             for type_idx in range(type_vector.size(1)) :
-                _type = type_vector[:,type_idx]                         # (V,)
-                _out = self._calc_point(coords, atom_radii[type_idx], grid_box.grid)  # (D, H, W, V)
-                torch.matmul(_out, _type, out = out_box[type_idx])      # (D, H, W, V) * (V,) -> (D, H, W)
+                _type = type_vector[:,type_idx]                             # (V,)
+                _out = self._calc_point(coords, atom_radii[type_idx], grid) # (D, H, W, V)
+                torch.matmul(_out, _type, out = out[:, :, :, type_idx])     # (D, H, W, V) * (V,) -> (D, H, W)
         else :
-            _out = self._calc_point(coords, atom_radii, grid_box.grid)  # (D, H, W, V)
-            _out = torch.matmul(_out, type_vector)                      # (D, H, W, C)
-            out_box[:] = _out.permute(3, 0, 1, 2)                       # (C, D, H, W)
+            _out = self._calc_point(coords, atom_radii, grid)               # (D, H, W, V)
+            _out = torch.matmul(_out, type_vector, out=out)                 # (D, H, W, C)
         if self.binary :
-            out_box.clip_(max=1.)
-        return out_box
+            out.clip_(max=1.)
+        return out
+
+    ###############
+    """INDEX"""
 
     def forward_index(
         self,
@@ -295,24 +258,24 @@ class GridMaker() :
         atom_size = atom_radii * self.final_radius_multiple
 
         # Clipping Overlapped Atoms
-        mask = _get_overlap(coords, atom_size, self.lower_bound, self.upper_bound)
-        coords, type_index = coords[mask], type_index[mask]
-        if isinstance(atom_radii, Tensor) :
-            atom_radii, atom_size = atom_radii[mask], atom_size[mask]
+        box_overlap = self._get_overlap(coords, atom_size)
+        coords, type_index = coords[box_overlap], type_index[box_overlap]
+        atom_radii = atom_radii[box_overlap] if isinstance(atom_radii, Tensor) else atom_radii
+        atom_size = atom_radii * self.final_radius_multiple
+        block_overlap_dict = self._get_overlap_blocks(coords, atom_size)
 
         # Run
-        for xidx in range(self.num_blocks) :
-            start_x = xidx*BLOCKDIM
-            end_x = start_x + BLOCKDIM
-            for yidx in range(self.num_blocks) :
-                start_y = yidx*BLOCKDIM
-                end_y = start_y + BLOCKDIM
-                for zidx in range(self.num_blocks) :
-                    start_z = zidx*BLOCKDIM
-                    end_z = start_z + BLOCKDIM
-                    out_box = out[:, start_x:end_x, start_y:end_y, start_z:end_z]
-                    grid_box = self.grid_box_dict[(xidx, yidx, zidx)]
-                    self._set_atoms_index(coords, type_index, atom_radii, atom_size, grid_box, out_box)
+        for xidx, yidx, zidx in itertools.product(range(self.num_blocks), repeat=3) :
+            start_x, end_x = xidx*BLOCKDIM, (xidx+1)*BLOCKDIM
+            start_y, end_y = yidx*BLOCKDIM, (yidx+1)*BLOCKDIM
+            start_z, end_z = zidx*BLOCKDIM, (zidx+1)*BLOCKDIM
+
+            grid_block = self.grid_block_dict[(xidx, yidx, zidx)]
+            overlap = block_overlap_dict[(xidx, yidx, zidx)]
+            coords_block, type_index_block = coords[overlap], type_index[overlap]
+            atom_radii_block = atom_radii[overlap] if isinstance(atom_radii, Tensor) else atom_radii
+            out_block = out[:, start_x:end_x, start_y:end_y, start_z:end_z]
+            self._set_atoms_index(coords_block, type_index_block, atom_radii_block, grid_block, out_block)
 
         return out
 
@@ -339,40 +302,69 @@ class GridMaker() :
         coords: FloatTensor,
         type_index: FloatTensor,
         atom_radii: Union[float, FloatTensor],
-        atom_size: Union[float, FloatTensor],
-        grid_box: _GridBox,
-        out_box: FloatTensor,
+        grid: FloatTensor,
+        out: FloatTensor,
     ) -> FloatTensor :
         """
         coords: (V, 3)
         type_index: (V,)
         atom_radii: scalar or (V, )
-        atom_size: scalar or (V, )
-        grid_box:
-            grid: (D, H, W, 3)
-            lower_bound: (1, 3)
-            upper_bound: (1, 3)
+        grid: (D, H, W, 3)
 
-        out_box: (C, D, H, W)
+        out: (C, D, H, W)
         """
-        D, H, W = grid_box.grid.size()[:-1]
-        device = coords.device
-
-        mask = grid_box.get_overlap(coords, atom_size)
-        coords, type_index = coords[mask], type_index[mask]
-        atom_radii = atom_radii[mask] if isinstance(atom_radii, Tensor) else atom_radii
-        _out = self._calc_point(coords, atom_radii, grid_box.grid)   # (D, H, W, V)
+        _out = self._calc_point(coords, atom_radii, grid)      # (D, H, W, V)
         for idx, typ in enumerate(type_index) :
-            out_box[typ].add_(_out[:,:,:,idx])                           # (C, D, H, W)
+            out[typ].add_(_out[:,:,:,idx])                          # (C, D, H, W)
         if self.binary :
-            out_box.clip_(max=1.)
-        return out_box
+            out.clip_(max=1.)
+        return out
 
+    def _get_overlap(
+        self,
+        coords: FloatTensor,
+        atom_size: Union[FloatTensor, float],
+    ) -> LongTensor :
+        if isinstance(atom_size, Tensor) and atom_size.dim() == 1:
+            atom_size = atom_size.unsqueeze(1)
+        lb_overlap = torch.greater(coords + atom_size, self.lower_bound).all(dim=-1)    # (V,)
+        ub_overlap = torch.less(coords - atom_size, self.upper_bound).all(dim=-1)       # (V,)
+        overlap = lb_overlap.logical_and(ub_overlap)                                    # (V,)
+        return torch.where(overlap)
 
-    @staticmethod
-    def do_transform(coords, center, random_translation, random_rotation) -> FloatTensor:
-        return Transform.do_transform(coords, center, random_translation, random_rotation)
-    
+    def _get_overlap_blocks(
+        self,
+        coords: FloatTensor,
+        atom_size: Union[FloatTensor, float]
+    ) -> Dict[Tuple[int, int, int], LongTensor] :
+        def get_axis_overlap_list(coord_1d, atom_size) -> List[BoolTensor]:
+            overlaps = [None] * self.num_blocks
+
+            upper = torch.less(coord_1d, self.bounds[0] + atom_size)                    # (V,)
+            overlaps[0] = upper
+
+            for i in range(1, self.num_blocks-1) :
+                lower = torch.greater(coord_1d, self.bounds[i-1] - atom_size)           # (V,)
+                upper = torch.less(coord_1d, self.bounds[i] + atom_size)                # (V,)
+                overlaps[i] = lower.logical_and_(upper)
+
+            lower = torch.greater(coord_1d, self.bounds[-1] - atom_size)                # (V,)
+            overlaps[-1] = lower
+
+            return overlaps
+        overlap_dict = {key: None for key in self.grid_block_dict.keys()}
+        x, y, z = torch.unbind(coords, dim=-1)
+
+        x_overlap_list = get_axis_overlap_list(x, atom_size)
+        y_overlap_list = get_axis_overlap_list(y, atom_size)
+        z_overlap_list = get_axis_overlap_list(z, atom_size)
+        for xidx, yidx, zidx in itertools.product(range(self.num_blocks), repeat=3) :
+            x_overlap = x_overlap_list[xidx]
+            y_overlap = y_overlap_list[yidx]
+            z_overlap = z_overlap_list[zidx]
+            overlap_dict[(xidx,yidx,zidx)] = torch.where(x_overlap & y_overlap & z_overlap)
+        return overlap_dict
+
     def _calc_point(
         self,
         coords: FloatTensor,
@@ -384,33 +376,22 @@ class GridMaker() :
         radii: scalar or (V, )
         grid: (D, H, W, 3)
         """
-        if self.binary :
-            return self.__calc_grid_density_binary(coords, atom_radii, grid)
-        elif self.mix_density :
-            return self.__calc_grid_density_mix(coords, atom_radii, grid)
-        else :
-            return self.__calc_grid_density_gaussian(coords, atom_radii, grid)
-
-    def __calc_grid_density_binary(
-        self,
-        coords: FloatTensor,
-        atom_radii: Union[float, FloatTensor],
-        grid: FloatTensor,
-    ) -> FloatTensor :
-        dist = torch.cdist(grid, coords)   # (D*H*W, V)
-        return torch.less(dist, atom_radii).float()
-
-    def __calc_grid_density_mix(
-        self,
-        coords: FloatTensor,
-        atom_radii: Union[float, FloatTensor],
-        grid: FloatTensor,
-    ) -> FloatTensor :
         dist = torch.cdist(grid, coords)   # (D*H*W, V)
         if isinstance(atom_radii, float) :
-            dr = dist / atom_radii                                  # (D*H*W, V)
+            dr = dist / atom_radii                                  # (D, H, W, V)
         else :
-            dr = dist / atom_radii.unsqueeze(0)                     # (D*H*W, V)
+            dr = dist / atom_radii.unsqueeze(0)                     # (D, H, W, V)
+        if self.binary :
+            return self.__calc_grid_density_binary(dr)
+        elif self.mix_density :
+            return self.__calc_grid_density_mix(dr)
+        else :
+            return self.__calc_grid_density_gaussian(dr)
+
+    def __calc_grid_density_binary(self, dr: FloatTensor) -> FloatTensor :
+        return torch.less(dr, 1.).float()
+
+    def __calc_grid_density_mix(self, dr: FloatTensor) -> FloatTensor :
         mask1 = torch.greater(dr, self.final_radius_multiple)       # (D*H*W, V)
         mask2 = torch.greater(dr, self.gaussian_radius_multiple)    # (D*H*W, V)
         drsquare = torch.pow(dr, 2)
@@ -421,17 +402,7 @@ class GridMaker() :
         out = torch.where(mask1, 0, out)
         return out
 
-    def __calc_grid_density_gaussian(
-        self,
-        coords: FloatTensor,
-        atom_radii: Union[float, FloatTensor],
-        grid: FloatTensor,
-    ) -> FloatTensor :
-        dist = torch.cdist(grid, coords)                            # (D*H*W, V)
-        if isinstance(atom_radii, float) :
-            dr = dist / atom_radii                                  # (D*H*W, V)
-        else :
-            dr = dist / atom_radii.unsqueeze(0)                     # (D*H*W, V)
+    def __calc_grid_density_gaussian(self, dr: FloatTensor) -> FloatTensor :
         mask = torch.greater(dr, self.final_radius_multiple)        # (D*H*W, V)
         out = torch.exp(-2.0*torch.pow(dr, 2))
         out.masked_fill_(mask, 0)
@@ -449,3 +420,16 @@ class GridMaker() :
             else :  # quadratic
                 q = (self.A * dr + self.B) * dr + self.C
                 return max(q, 0)
+
+def __get_overlap(
+    coords: FloatTensor,                        # (V, 3)
+    atom_size: Union[float, FloatTensor],       # (V,) or scalar
+    lower_bound: Union[float, FloatTensor],     # (1, 3) or scalar
+    upper_bound: Union[float, FloatTensor],     # (1, 3) or scalar
+) -> LongTensor:
+    device = coords.device
+    if isinstance(lower_bound, Tensor) :
+        lower_bound.to(device)
+    if isinstance(upper_bound, Tensor) :
+        upper_bound.to(device)
+
