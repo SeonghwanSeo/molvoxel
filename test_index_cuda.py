@@ -11,7 +11,7 @@ save_dir = 'result_index'
 
 def run_test(gmaker, coords, center, atom_labels, radii, random_translation = 0.0, random_rotation = False) :
     dims = gmaker.grid_dimension(17)
-    out = torch.empty(dims)
+    out = torch.empty(dims, device='cuda')
     gmaker.forward_index(coords, center, atom_labels, radii, random_translation, random_rotation, out=out)
     return out
 
@@ -42,18 +42,18 @@ type_radii[11:] = 2.0
 atom_radii = torch.ones((coords.size(0),))
 atom_radii[100:] = 2.0
 
-init_coords, init_center, init_atom_labels = coords.clone(), center.clone(), atom_labels.clone()
+coords, center, atom_labels, type_radii, atom_radii = \
+        coords.cuda(), center.cuda(), atom_labels.cuda(), type_radii.cuda(), atom_radii.cuda()
 
 print('Test 1: Binary: False, Raddi-Type-Index: False, Density: Mixed')
 resolution, dimension = 0.5, 48
-gmaker = grid_maker.GridMaker(resolution, dimension)
+gmaker = grid_maker.GridMaker(resolution, dimension, gpu=True)
 out = gmaker.forward_index(coords, center, atom_labels, radii=1.0)
-print(out.view(out.size(0), -1).sum(dim=-1))
 save_dx(out, center, resolution, 'ref')
 save_mol(mol, coords, 'ref')
 
 print('Test 2: High Resolution')
-gmaker_hr = grid_maker.GridMaker(0.3, 64)
+gmaker_hr = grid_maker.GridMaker(0.3, 64, gpu=True)
 hr_out = run_test(gmaker_hr, coords, center, atom_labels, 1.0)
 save_dx(hr_out, center, 0.3, 'hr')
 
@@ -73,7 +73,7 @@ out = run_test(gmaker, coords, center, atom_labels, type_radii)
 save_dx(out, center, resolution, 'test5')
 
 print('Test 6: Binary: False, Raddi-Type-Index: False, Density: Gaussian')
-gmaker_gaus = grid_maker.GridMaker(gaussian_radius_multiple=-1.5)
+gmaker_gaus = grid_maker.GridMaker(gaussian_radius_multiple=-1.5, gpu=True)
 out = run_test(gmaker_gaus, coords, center, atom_labels, 1.0)
 save_dx(out, center, resolution, 'test6')
 

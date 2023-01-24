@@ -50,8 +50,6 @@ type_radii[5:] = 2.0
 atom_radii = torch.ones((coords.size(0),))
 atom_radii[100:] = 2.0
 
-init_coords, init_center, init_type_vector = coords.clone(), center.clone(), type_vector.clone()
-
 print('Test 1: Binary: False, Raddi-Type-Index: False, Density: Mixed')
 resolution, dimension = 0.5, 48
 gmaker = grid_maker.GridMaker(resolution, dimension)
