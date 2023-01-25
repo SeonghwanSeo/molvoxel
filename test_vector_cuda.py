@@ -2,106 +2,122 @@ import torch
 import os
 
 from pymolgrid import grid_maker
-from pymolgrid.pymol import write_grid_to_dx_file
 from rdkit import Chem
-import time
 
-os.system('mkdir -p result_vector')
+ligand_path = './10gs/ligand.sdf'
+pocket_path = './10gs/pocket.pdb'
 save_dir = 'result_vector'
 
-def run_test(gmaker, coords, center, type_vector, radii, random_translation = 0.0, random_rotation = False) :
-    dims = gmaker.grid_dimension(6)
-    out = torch.empty(dims, device='cuda')
-    gmaker.forward_vector(coords, center, type_vector, radii, random_translation, random_rotation, out=out)
-    return out
+try :
+    from test_utils import draw_pse
+    os.system(f'mkdir -p {save_dir}')
+except :
+    draw_pse = (lambda *x: None)
 
-def save_dx(out, center, resolution, prefix) :
-    for idx, label in enumerate(['C','N','O','P','S','Ar']) :
-        write_grid_to_dx_file(f'{save_dir}/{prefix}_{label}.dx', out[idx], center, resolution)
+ligand_rdmol = Chem.SDMolSupplier(ligand_path)[0]
+pocket_rdmol = Chem.MolFromPDBFile(pocket_path)
 
-def save_mol(mol, coords, prefix) :
-    mol = Chem.Mol(mol)
-    conformer = mol.GetConformer()
-    for i in range(mol.GetNumAtoms()) :
-        conformer.SetAtomPosition(i, coords[i].tolist())
-    w = Chem.PDBWriter(f'{save_dir}/{prefix}.pdb')
-    w.write(mol)
-    w.close()
+ligand_channels = ['C', 'N', 'O', 'S', 'Aromatic']
+pocket_channels = ['C', 'N', 'O', 'S', 'Aromatic']
+num_ligand_types = len(ligand_channels)
+num_pocket_types = len(pocket_channels)
+num_types = num_pocket_types + num_ligand_types
 
-DATA = './1n4k/complex_ligand_pocket.pdb'
+ligand_coords = torch.FloatTensor(ligand_rdmol.GetConformer().GetPositions())
+ligand_types = torch.LongTensor([atom.GetAtomicNum() for atom in ligand_rdmol.GetAtoms()])
+ligand_center = ligand_coords.mean(dim=0)
 
-mol = Chem.MolFromPDBFile(DATA)
-coords = torch.FloatTensor(mol.GetConformer().GetPositions())
-center = coords.mean(dim=0)
+pocket_coords = torch.FloatTensor(pocket_rdmol.GetConformer().GetPositions())
+pocket_types = torch.LongTensor([atom.GetAtomicNum() for atom in pocket_rdmol.GetAtoms()])
 
-atom_labels = torch.LongTensor([atom.GetAtomicNum() for atom in mol.GetAtoms()])
-print('Atom Set', set(atom_labels.tolist()))
-type_vector = torch.zeros((mol.GetNumAtoms(), 6))
-type_vector[atom_labels==6, 0] = 1
-type_vector[atom_labels==7, 1] = 1
-type_vector[atom_labels==8, 2] = 1
-type_vector[atom_labels==15, 3] = 1
-type_vector[atom_labels==16, 4] = 1
-type_vector[[atom.GetIsAromatic() for atom in mol.GetAtoms()], 5] = 1
+coords = torch.cat([ligand_coords, pocket_coords], dim=0)
+center = ligand_center
 
-type_radii = torch.ones((6,), dtype=torch.float)
-type_radii[3:] = 3.0
-type_radii[5:] = 2.0
+type_vector = torch.zeros(coords.size(0), num_types)
+ligand_type_vector = type_vector[:ligand_rdmol.GetNumAtoms()]
+pocket_type_vector = type_vector[ligand_rdmol.GetNumAtoms():]
+ligand_type_vector[ligand_types==6, 0] = 1
+ligand_type_vector[ligand_types==7, 1] = 1
+ligand_type_vector[ligand_types==8, 2] = 1
+ligand_type_vector[ligand_types==16, 3] = 1
+ligand_type_vector[[atom.GetIsAromatic() for atom in ligand_rdmol.GetAtoms()], 4] = 1
+pocket_type_vector[pocket_types==6, 5] = 1
+pocket_type_vector[pocket_types==7, 6] = 1
+pocket_type_vector[pocket_types==8, 7] = 1
+pocket_type_vector[pocket_types==16, 8] = 1
+pocket_type_vector[[atom.GetIsAromatic() for atom in pocket_rdmol.GetAtoms()], 9] = 1
+
+type_radii = torch.ones((num_types,), dtype=torch.float)
+type_radii[:4] = 2.0
+type_radii[4] = 3.0
 atom_radii = torch.ones((coords.size(0),))
 atom_radii[100:] = 2.0
 
-coords, center, type_vector, type_radii, atom_radii = \
-        coords.cuda(), center.cuda(), type_vector.cuda(), type_radii.cuda(), atom_radii.cuda()
+"""START"""
+gmaker = grid_maker.GridMaker(device='cuda')
+gmaker_hr = grid_maker.GridMaker(0.4, 64)
+gmaker_gaus = grid_maker.GridMaker(gaussian_radius_multiple=-1.5)
 
-print('Test 1: Binary: False, Raddi-Type-Index: False, Density: Mixed')
-resolution, dimension = 0.5, 48
-gmaker = grid_maker.GridMaker(resolution, dimension, gpu=True)
-ref_out = gmaker.forward_vector(coords, center, type_vector, radii=1.0)
-save_dx(ref_out, center, resolution, 'ref')
-save_mol(mol, coords, 'ref')
+grid = torch.zeros(gmaker.grid_dimension(num_types), device='cuda')
+grid_hr = torch.zeros(gmaker_hr.grid_dimension(num_types))
+grid_gaus = torch.zeros(gmaker_gaus.grid_dimension(num_types))
+
+"""SET DEVICE"""
+device = 'cuda'
+coords, type_vector, center, type_radii, atom_radii = \
+        coords.to(device), type_vector.to(device), center.to(device), type_radii.to(device), atom_radii.to(device)
+#gmaker.to(device)
+gmaker_hr.cuda()
+gmaker_gaus.to(device)
+
+#grid = grid.to(device)
+grid_hr = grid_hr.cuda()
+grid_gaus = grid_gaus.to(device)
+
+"""SPLIT GRID"""
+ligand_grid, pocket_grid = torch.split(grid, (num_ligand_types, num_pocket_types))
+ligand_grid_hr, pocket_grid_hr = torch.split(grid_hr, (num_ligand_types, num_pocket_types))
+ligand_grid_gaus, pocket_grid_gaus = torch.split(grid_gaus, (num_ligand_types, num_pocket_types))
+
+print('Test 1: Binary: False, Raddi-Type-Index: False, Density: Mixed (Default)')
+ref_grid = gmaker.forward_vector(coords, center, type_vector, radii=1.0)
+out_grid = gmaker.forward_vector(coords, center, type_vector, radii=1.0, out=grid)
+assert (grid - ref_grid).abs_().less_(1e-5).all().item(), 'REPRODUCTION FAIL'
+assert grid is out_grid, 'INPLACE FAILE'
+draw_pse(f'{save_dir}/ref.pse', ligand_rdmol, pocket_rdmol, ligand_grid, pocket_grid, \
+        ligand_channels, pocket_channels, center, gmaker.get_resolution())
 
 print('Test 2: High Resolution')
-gmaker_hr = grid_maker.GridMaker(0.3, 64, gpu=True)
-hr_out = run_test(gmaker, coords, center, type_vector, 1.0)
-save_dx(hr_out, center, 0.3, 'hr')
+gmaker_hr.forward_vector(coords, center, type_vector, radii=1.0, out=grid_hr)
+draw_pse(f'{save_dir}/hr.pse', ligand_rdmol, pocket_rdmol, ligand_grid_hr, pocket_grid_hr, \
+        ligand_channels, pocket_channels, center, gmaker_hr.get_resolution())
 
 print('Test 3: With Atom-wise Radii')
-out = run_test(gmaker, coords, center, type_vector, atom_radii)
-save_dx(out, center, resolution, 'test3')
+gmaker.forward_vector(coords, center, type_vector, atom_radii, out=grid)
+draw_pse(f'{save_dir}/atom-wise.pse', ligand_rdmol, pocket_rdmol, ligand_grid, pocket_grid, \
+        ligand_channels, pocket_channels, center, gmaker.get_resolution())
 
-print('Test 4: Binary: True, Radii-Type-Index: False')
+print('Test 4: Binary: True')
 gmaker.set_binary(True)
-out = run_test(gmaker, coords, center, type_vector, 1.0)
-save_dx(out, center, resolution, 'test4')
+gmaker.forward_vector(coords, center, type_vector, radii = 1.0, out=grid)
+draw_pse(f'{save_dir}/binary.pse', ligand_rdmol, pocket_rdmol, ligand_grid, pocket_grid, \
+        ligand_channels, pocket_channels, center, gmaker.get_resolution())
 
-print('Test 5: Binary: True, Raddi-Type-Index: True')
-gmaker.set_binary(True)
-gmaker.set_radii_type_indexed(True)
-out = run_test(gmaker, coords, center, type_vector, type_radii)
-save_dx(out, center, resolution, 'test5')
-
-print('Test 6: Binary: False, Raddi-Type-Index: False, Density: Gaussian')
-gmaker_gaus = grid_maker.GridMaker(gaussian_radius_multiple=-1.5, gpu=True)
-out = run_test(gmaker_gaus, coords, center, type_vector, 1.0)
-save_dx(out, center, resolution, 'test6')
-
+print('Test 5: Raddi-Type-Index: True')
 gmaker.set_binary(False)
+gmaker.set_radii_type_indexed(True)
+gmaker.forward_vector(coords, center, type_vector, type_radii, out=grid)
+draw_pse(f'{save_dir}/type-wise.pse', ligand_rdmol, pocket_rdmol, ligand_grid, pocket_grid, \
+        ligand_channels, pocket_channels, center, gmaker.get_resolution())
+
+print('Test 6: Density: Gaussian')
+gmaker_gaus.forward_vector(coords, center, type_vector, radii = 1.0, out=grid_gaus)
+draw_pse(f'{save_dir}/gaussian.pse', ligand_rdmol, pocket_rdmol, ligand_grid_gaus, pocket_grid_gaus, \
+        ligand_channels, pocket_channels, center, gmaker_gaus.get_resolution())
+
+print('Test 7: Random transform')
 gmaker.set_radii_type_indexed(False)
-
-print('Test 7-1: Random translation')
-new_coords = gmaker.do_transform(coords, center, random_translation=1.0)
-out = run_test(gmaker, new_coords, center, type_vector, 1.0)
-save_dx(out, center, resolution, 'test7-1')
-save_mol(mol, new_coords, 'test7-1')
-
-print('Test 7-2: Random rotation')
-new_coords = gmaker.do_transform(coords, center, random_rotation=True)
-out = run_test(gmaker, new_coords, center, type_vector, 1.0)
-save_dx(out, center, resolution, 'test7-2')
-save_mol(mol, new_coords, 'test7-2')
-
-print('Test 7-3: Random transform')
-new_coords = gmaker.do_transform(coords, center, random_translation=1.0, random_rotation=True)
-out = run_test(gmaker, new_coords, center, type_vector, 1.0)
-save_dx(out, center, resolution, 'test7-3')
-save_mol(mol, new_coords, 'test7-3')
+new_coords = gmaker.do_transform(coords, center, random_translation=0.5, random_rotation=True)
+gmaker.forward_vector(new_coords, center, type_vector, radii = 1.0, out=grid)
+draw_pse(f'{save_dir}/transform.pse', ligand_rdmol, pocket_rdmol, ligand_grid, pocket_grid, \
+        ligand_channels, pocket_channels, center, gmaker.get_resolution(), new_coords=new_coords)
