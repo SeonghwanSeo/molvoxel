@@ -1,7 +1,4 @@
 import os
-import subprocess
-import sys
-from time import sleep
 from rdkit import Chem
 
 import pymol
@@ -14,6 +11,7 @@ POCKET = 'pocket'
 CARTOON = 'pocketCartoon'
 LIGAND = 'ligand'
 
+# https://github.com/pharmai/plip/blob/master/plip/visualization/pymol.py
 class PyMOLVisualizer() :
     def __init__(
         self,

@@ -1,19 +1,18 @@
 from pymolgrid.pymol import PyMOLVisualizer
 
-from torch import FloatTensor, LongTensor
 from rdkit import Chem
 from rdkit.Chem import Mol
 from typing import List, Dict
+from numpy.typing import ArrayLike
 
-def apply_coord(rdmol: Mol, coords: FloatTensor) -> Mol :
+def apply_coord(rdmol: Mol, coords: ArrayLike) -> Mol :
     rdmol = Chem.Mol(rdmol)
     conf = rdmol.GetConformer()
     for i in range(rdmol.GetNumAtoms()) :
         conf.SetAtomPosition(i, coords[i].tolist())
     return rdmol
 
-def split_channels(grid: FloatTensor, channel_names: List[str]) -> Dict[str, FloatTensor]:
-    assert grid.size(0) == len(channel_names)
+def split_channels(grid: ArrayLike, channel_names: List[str]) -> Dict[str, ArrayLike]:
     return {name: grid[i] for i, name in enumerate(channel_names)}
 
 visualizer = PyMOLVisualizer()

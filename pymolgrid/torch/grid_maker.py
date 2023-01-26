@@ -1,13 +1,12 @@
 import math
 import torch
-import torch.nn.functional as F
 import itertools
 
 from torch import Tensor, FloatTensor, LongTensor, BoolTensor
 from typing import Tuple, Union, Optional, Dict, List
 from torch_scatter import scatter_add
 
-from .transform import Transform
+from .transform import do_random_transform
 
 """
 radii: input value of molgrid
@@ -60,6 +59,7 @@ class GridMaker() :
 
         self._setup_block(blockdim)
 
+    """ DEVICE """
     def to(self, device, update_blockdim = True, blockdim = None) :
         device = torch.device(device)
         if device == self.device :
@@ -76,6 +76,7 @@ class GridMaker() :
     def cpu(self, update_blockdim = True, blockdim = None) :
         return self.to('cpu', update_blockdim, blockdim)
             
+    """ Attribute """
     def spatial_grid_dimension(self) -> Tuple[int, int, int] :
         return (self.dimension, self.dimension, self.dimension)
     def grid_dimension(self, ntypes: int) -> Tuple[int, int, int, int] :
@@ -103,11 +104,37 @@ class GridMaker() :
     def get_binary(self) -> bool:
         return self.binary
 
-    @staticmethod
-    def do_transform(coords, center, random_translation=0.0, random_rotation:bool = False) -> FloatTensor:
-        return Transform.do_transform(coords, center, random_translation, random_rotation)
+    def forward(
+        self,
+        coords: FloatTensor,
+        center: FloatTensor,
+        types: Union[FloatTensor, LongTensor],
+        radii: Union[float, FloatTensor],
+        random_translation: float = 0.0,
+        random_rotation: bool = False,
+        out: Optional[FloatTensor] = None
+    ) -> FloatTensor :
+        """
+        coords: (V, 3)
+        center: (3,)
+        types: (V, C) or (V,)
+        radii: scalar or (V, ) of (C, )
+        random_translation: float (nonnegative)
+        random_rotation: bool
 
-    # Vector
+        out: (C,D,H,W)
+        """
+        if types.dim() == 1 :
+            type_index = types
+            return self.forward_index(coords, center, type_index, radii, random_translation, random_rotation, out)
+        else :
+            type_vector = types
+            return self.forward_vector(coords, center, type_vector, radii, random_translation, random_rotation, out)
+
+    __call__ = forward
+
+    """ VECTOR """
+    @torch.no_grad()
     def forward_vector(
         self,
         coords: FloatTensor,
@@ -136,7 +163,7 @@ class GridMaker() :
             out = torch.empty((C, D, H, W), device=self.device)
 
         coords = coords - center.unsqueeze(0)
-        coords = self.do_transform(coords, None, random_translation, random_rotation)
+        coords = do_random_transform(coords, None, random_translation, random_rotation)
 
         atom_radii = radii * self.radius_scale
         if self.radii_type_indexed :
@@ -238,9 +265,8 @@ class GridMaker() :
                 out[:] = torch.matmul(type_vector, res).view(-1, D, H, W)       # (C, D, H, W)
         return out
 
-    ###############
-    """INDEX"""
-
+    """ INDEX """
+    @torch.no_grad()
     def forward_index(
         self,
         coords: FloatTensor,
@@ -274,7 +300,7 @@ class GridMaker() :
             out.fill_(0.)
 
         coords = coords - center.unsqueeze(0)
-        coords = self.do_transform(coords, None, random_translation, random_rotation)
+        coords = do_random_transform(coords, None, random_translation, random_rotation)
 
         if self.radii_type_indexed :
             if isinstance(radii, float) :
@@ -355,6 +381,33 @@ class GridMaker() :
         scatter_add(res, type_index, dim=0, out=out)
         return out
 
+    """ COMMON - BLOCK """
+    def _setup_block(self, blockdim) :
+        if blockdim is None :
+            if self.device == torch.device('cpu') :
+                blockdim = 8
+            else :
+                blockdim = math.ceil(self.dimension / 2)
+        self.blockdim = blockdim
+
+        axis = torch.arange(self.dimension, dtype=torch.float, device=self.device) * self.resolution - (self.width / 2.)
+        self.num_blocks = num_blocks = math.ceil(self.dimension / blockdim)
+        if self.num_blocks > 1 :
+            self.grid = None
+            self.grid_block_dict: Dict[Tuple[int,int,int], FloatTensor] = {}
+            for xidx, yidx, zidx in itertools.product(range(self.num_blocks), repeat=3) :
+                x_axis = axis[xidx*blockdim : (xidx+1)*blockdim]
+                y_axis = axis[yidx*blockdim : (yidx+1)*blockdim]
+                z_axis = axis[zidx*blockdim : (zidx+1)*blockdim]
+                grid_block = torch.stack(torch.meshgrid([x_axis, y_axis, z_axis], indexing='ij'), dim=-1)
+                self.grid_block_dict[(xidx, yidx, zidx)] = grid_block
+
+            self.bounds = [(axis[idx*blockdim].item() + (self.resolution / 2.))
+                                                for idx in range(1, num_blocks)]
+        else :
+            self.grid_block_dict = None
+            self.grid = torch.stack(torch.meshgrid([axis, axis, axis], indexing='ij'), dim=-1)
+
     def _get_overlap(
         self,
         coords: FloatTensor,
@@ -404,6 +457,7 @@ class GridMaker() :
             overlap_dict[(xidx,yidx,zidx)] = torch.where(x_overlap & y_overlap & z_overlap)[0]
         return overlap_dict
 
+    """ COMMON - GRID CALCULATION """
     def _calc_point(
         self,
         coords: FloatTensor,
@@ -448,29 +502,3 @@ class GridMaker() :
         out.masked_fill_(mask_final, 0)
         return out
     
-    def _setup_block(self, blockdim) :
-        if blockdim is None :
-            if self.device == torch.device('cpu') :
-                blockdim = 8
-            else :
-                blockdim = math.ceil(self.dimension / 2)
-        self.blockdim = blockdim
-
-        axis = torch.arange(self.dimension, dtype=torch.float, device=self.device)
-        axis.mul_(self.resolution).sub_(self.width / 2.)
-        self.num_blocks = num_blocks = math.ceil(self.dimension / blockdim)
-        if self.num_blocks > 1 :
-            self.grid = None
-            self.grid_block_dict: Dict[Tuple[int,int,int], FloatTensor] = {}
-            for xidx, yidx, zidx in itertools.product(range(self.num_blocks), repeat=3) :
-                x_axis = axis[xidx*blockdim : (xidx+1)*blockdim]
-                y_axis = axis[yidx*blockdim : (yidx+1)*blockdim]
-                z_axis = axis[zidx*blockdim : (zidx+1)*blockdim]
-                grid_block = torch.stack(torch.meshgrid([x_axis, y_axis, z_axis], indexing='ij'), dim=-1)
-                self.grid_block_dict[(xidx, yidx, zidx)] = grid_block
-
-            self.bounds = [(axis[idx*blockdim].item() + (self.resolution / 2.))
-                                                for idx in range(1, num_blocks)]
-        else :
-            self.grid_block_dict = None
-            self.grid = torch.stack(torch.meshgrid([axis, axis, axis], indexing='ij'), dim=-1)
