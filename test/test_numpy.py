@@ -66,9 +66,9 @@ draw_pse(f'{save_dir}/ref.pse', ligand_rdmol, pocket_rdmol, ligand_grid, pocket_
         ligand_channels, pocket_channels, center, gmaker.get_resolution())
 
 print('Test 2: High Resolution')
-#gmaker_hr.forward(coords, center, type_index, radii=1.0, out=grid_hr)
-#draw_pse(f'{save_dir}/hr.pse', ligand_rdmol, pocket_rdmol, ligand_grid_hr, pocket_grid_hr, \
-        #ligand_channels, pocket_channels, center, gmaker_hr.get_resolution())
+gmaker_hr.forward(coords, center, type_index, radii=1.0, out=grid_hr)
+draw_pse(f'{save_dir}/hr.pse', ligand_rdmol, pocket_rdmol, ligand_grid_hr, pocket_grid_hr, \
+        ligand_channels, pocket_channels, center, gmaker_hr.get_resolution())
 
 print('Test 3: With Atom-wise Radii')
 gmaker.forward(coords, center, type_index, atom_radii, out=grid)

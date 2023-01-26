@@ -27,7 +27,7 @@ def write_grid_to_dx_file(dx_path, values, center, resolution):
     ]
     n_points = 0
     line = ''
-    values = values.contiguous().view(-1).tolist()
+    values = values.reshape(-1).tolist()
     for i, value in enumerate(values) :
         if i % 3 == 2 :
             line += f'{value:.5f}\n'
