@@ -12,7 +12,7 @@ class T() :
     def __call__(self, coords, center) :
         return __do_transform(coords, center, self.translation, self.quaternion)
 
-class Transform() :
+class RandomTransform() :
     def __init__(
         self,
         random_translation: float = 0.0,

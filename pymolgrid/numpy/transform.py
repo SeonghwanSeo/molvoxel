@@ -12,7 +12,7 @@ class T() :
     def __call__(self, coords, center) :
         return __do_transform(coords, center, self.translation, self.quaternion)
 
-class Transform() :
+class RandomTransform() :
     def __init__(
         self,
         random_translation: float = 0.0,
@@ -46,7 +46,7 @@ def __do_transform(
             if np.shape(center) == (3,) :
                 center = np.array([center])
             coords = apply_quaternion(coords - center, quaternion)
-            np.add(coords, translation, coords)
+            np.add(coords, center, coords)
         else :
             coords = apply_quaternion(coords, quaternion)
 

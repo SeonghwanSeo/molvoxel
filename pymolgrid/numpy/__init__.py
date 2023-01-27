@@ -1,2 +1,2 @@
-from .grid_maker import GridMaker
-from .transform import Transform
+from .voxelizer import Voxelizer
+from .transform import RandomTransform
