@@ -26,12 +26,15 @@ class Voxelizer(BaseVoxelizer) :
         atom_scale: float = 1.5,
         density: str = 'gaussian',
         channel_wise_radii: bool = False,
+        precision: int = 32,
         blockdim: Optional[int] = None
     ) :
         super(Voxelizer, self).__init__(resolution, dimension, atom_scale, channel_wise_radii)
         assert density in ['gaussian', 'binary']
         self._density = density.lower()
         self._gaussian = (self._density == 'gaussian')
+        assert precision in [32, 64]
+        self.fp = np.float32 if precision == 32 else np.float64
         self._setup_block(blockdim)
 
     @property
@@ -49,7 +52,7 @@ class Voxelizer(BaseVoxelizer) :
         blockdim = blockdim if blockdim is not None else 8
         self.blockdim = blockdim
 
-        axis = np.arange(self.dimension, dtype=np.float_) * self.resolution - (self.width/2.)
+        axis = np.arange(self.dimension, dtype=np.float64) * self.resolution - (self.width/2.)  # cdist only support float64
         self.num_blocks = num_blocks = math.ceil(self.dimension / blockdim)
         if self.num_blocks > 1 :
             self.grid = None
@@ -70,14 +73,14 @@ class Voxelizer(BaseVoxelizer) :
     def get_empty_grid(self, num_channels: int, batch_size: Optional[int] = None, init_zero: bool = False) -> NDArrayFloat:
         if init_zero :
             if batch_size is None :
-                return np.zeros(self.grid_dimension(num_channels), dtype=np.float_)
+                return np.zeros(self.grid_dimension(num_channels), dtype=self.fp)
             else :
-                return np.zeros((batch_size,) + self.grid_dimension(num_channels), dtype=np.float_)
+                return np.zeros((batch_size,) + self.grid_dimension(num_channels), dtype=self.fp)
         else :
             if batch_size is None :
-                return np.empty(self.grid_dimension(num_channels), dtype=np.float_)
+                return np.empty(self.grid_dimension(num_channels), dtype=self.fp)
             else :
-                return np.empty((batch_size,) + self.grid_dimension(num_channels), dtype=np.float_)
+                return np.empty((batch_size,) + self.grid_dimension(num_channels), dtype=self.fp)
 
     """ Forward """
     def forward(
@@ -135,6 +138,14 @@ class Voxelizer(BaseVoxelizer) :
         # Set Coordinate
         coords = coords - center.reshape(1,3)
         coords = do_random_transform(coords, None, random_translation, random_rotation)
+
+        # DataType
+        if coords.dtype != np.float64 :     # cdist support only float64
+            coords = coords.astype(np.float64)
+        if features.dtype != self.fp :
+            features = features.astype(self.fp)
+        if not np.isscalar(radii) and radii.dtype != self.fp :
+            radii = radii.astype(self.fp)
 
         # Set Out
         if out is None :
@@ -244,7 +255,7 @@ class Voxelizer(BaseVoxelizer) :
         self,
         coords: NDArrayFloat,
         center: NDArrayFloat,
-        types: NDArrayFloat,
+        types: NDArrayInt,
         radii: Union[float, NDArrayFloat],
         random_translation: float = 0.0,
         random_rotation: bool = False,
@@ -265,6 +276,12 @@ class Voxelizer(BaseVoxelizer) :
         # Set Coordinate
         coords = coords - center.reshape(1, 3)
         coords = do_random_transform(coords, None, random_translation, random_rotation)
+
+        # DataType
+        if coords.dtype != np.float64 :     # cdist support only float64
+            coords = coords.astype(np.float64)
+        if not np.isscalar(radii) and radii.dtype != self.fp :
+            radii = radii.astype(self.fp)
 
         # Set Out
         if out is None :
@@ -321,8 +338,7 @@ class Voxelizer(BaseVoxelizer) :
         V = coords.shape[0]
         C = np.max(types) + 1
         D = H = W = self.dimension
-        assert types.ndim == 1, f"types does not match dimension: {types.shape[0]} vs {(V,)}"
-        assert types.shape[0] == V, f'types does not match number of atoms: {types.shape[0]} vs {V}'
+        assert types.shape == (V,), f"types does not match dimension: {types.shape} vs {(V,)}"
         if not np.isscalar(radii) :
             if self.channel_wise_radii :
                 assert radii.ndim == 1, f"radii does not match dimension: {radii.shape} vs {('Channel',)}"
@@ -336,7 +352,7 @@ class Voxelizer(BaseVoxelizer) :
     def _set_grid_type(
         self,
         coords: NDArrayFloat,
-        types: NDArrayFloat,
+        types: NDArrayInt,
         radii: Union[float, NDArrayFloat],
         grid: NDArrayFloat,
         out: NDArrayFloat,
@@ -422,7 +438,9 @@ class Voxelizer(BaseVoxelizer) :
 
         out: (V, D*H*W)
         """
-        dist = cdist(coords, grid)                    # (V, D, H, W)
+        dist = cdist(coords, grid)              # (V, D, H, W)
+        if self.fp is np.float32 :
+            dist = dist.astype(self.fp)         # np.float64 -> np.float32
         if not np.isscalar(radii) :
             radii = np.expand_dims(radii, -1)
         dr = np.divide(dist, radii)
