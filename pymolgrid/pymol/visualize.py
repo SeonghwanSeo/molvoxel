@@ -1,5 +1,11 @@
 import os
 from rdkit import Chem
+import tempfile
+from pathlib import Path
+
+from rdkit.Chem import Mol
+from numpy.typing import ArrayLike
+from typing import Dict
 
 import pymol
 from pymol import cmd
@@ -7,153 +13,140 @@ from pymol import cmd
 from .dx import write_grid_to_dx_file
 from .atom import ATOMSYMBOL
 
-POCKET = 'pocket'
-CARTOON = 'pocketCartoon'
-LIGAND = 'ligand'
+PROTEIN = 'Protein'
+CARTOON = 'Cartoon'
+LIGAND = 'Ligand'
+MOLECULE = 'Molecule'
 
-# https://github.com/pharmai/plip/blob/master/plip/visualization/pymol.py
-class PyMOLVisualizer() :
-    def __init__(
-        self,
-        ligand_grid_color_dict = {},
-        pocket_grid_color_dict = {},
-    ) :
-        self.ligand_grid_color_dict = ATOMSYMBOL.copy()
-        self.ligand_grid_color_dict.update(ligand_grid_color_dict)
+ligand_grid_color_dict = ATOMSYMBOL.copy()
+ligand_grid_color_dict.update(ligand_grid_color_dict)
+molecule_grid_color_dict = ligand_grid_color_dict
 
-        self.pocket_grid_color_dict = ATOMSYMBOL.copy()
-        self.pocket_grid_color_dict['C'] = 'myblue'
-        self.pocket_grid_color_dict.update(pocket_grid_color_dict)
+protein_grid_color_dict = ATOMSYMBOL.copy()
+protein_grid_color_dict['C'] = 'aqua'
+protein_grid_color_dict.update(protein_grid_color_dict)
 
-    def run(
-        self,
-        pse_path,
-        ligand_rdmol,
-        pocket_rdmol,
-        ligand_grid_dict,
-        pocket_grid_dict,
-        center,
-        resolution,
-    ) :
-        self.start_pymol()
-        save_rdmol(ligand_rdmol, 'tmp_ligand.sdf')
-        save_rdmol(pocket_rdmol, 'tmp_pocket.pdb')
-        cmd.load('tmp_ligand.sdf')
-        cmd.load('tmp_pocket.pdb')
+def __launch_pymol() :
+    pymol.pymol_argv = ['pymol', '-pcq']
+    pymol.finish_launching(args=['pymol', '-pcq', '-K'])
+    cmd.reinitialize()
+    cmd.feedback('disable', 'all', 'everything')
 
-        cmd.set_name('tmp_ligand', LIGAND)
-        cmd.set_name('tmp_pocket', POCKET)
-        cmd.copy(CARTOON, POCKET)
+def visualize_mol(
+    pse_path: str,
+    rdmol: Mol,
+    grid_dict: Dict[str, ArrayLike],
+    center: ArrayLike,
+    resolution: float,
+) :
+    __launch_pymol()
+    cmd.set_color('aqua', '[0, 150, 255]')
 
-        cmd.hide('everything', 'all')
+    temp_dir = tempfile.TemporaryDirectory()
+    temp_dirpath = Path(temp_dir.name)
+    temp_mol_path = str(temp_dirpath / f'{MOLECULE}.sdf')
+    temp_grid_path = str(temp_dirpath / 'grid.dx')
 
-        cmd.show('sticks', POCKET)
-        cmd.color('myblue', POCKET)
-        
-        cmd.show('cartoon', CARTOON)
-        cmd.color('mylightblue', CARTOON)
+    __save_rdmol(rdmol, temp_mol_path)
+    cmd.load(temp_mol_path)
+    cmd.color('green', MOLECULE)
 
-        cmd.show('sticks', LIGAND)
-        cmd.color('green', LIGAND)
+    dx_dict = []
+    for key, grid in grid_dict.items() :
+        write_grid_to_dx_file(temp_grid_path, grid, center, resolution)
+        cmd.load(temp_grid_path)
+        dx = key
+        cmd.set_name('grid', dx)
+        if key in molecule_grid_color_dict :
+            cmd.color(molecule_grid_color_dict[key], dx)
+        dx_dict.append(dx)
+    cmd.group('Voxel', ' '.join(dx_dict))
 
-        cmd.util.cnc('all')
-        cmd.group('Structures', f'{POCKET} {CARTOON} {LIGAND}')
+    temp_dir.cleanup()
 
-        ligand_dx_dict = []
-        for key, grid in ligand_grid_dict.items() :
-            write_grid_to_dx_file('tmp_grid.dx', grid, center, resolution)
-            cmd.load('tmp_grid.dx')
-            dx = 'ligand_' + key
-            cmd.set_name('tmp_grid', dx)
-            if key in self.ligand_grid_color_dict :
-                cmd.color(self.ligand_grid_color_dict[key], dx)
-            ligand_dx_dict.append(dx)
-        cmd.group('LigandGrid', ' '.join(ligand_dx_dict))
-        cmd.show('dots', 'LigandGrid')
+    cmd.enable('all')
 
-        pocket_dx_dict = []
-        for key, grid in pocket_grid_dict.items() :
-            write_grid_to_dx_file('tmp_grid.dx', grid, center, resolution)
-            cmd.load('tmp_grid.dx')
-            dx = 'pocket_' + key
-            cmd.set_name('tmp_grid', dx)
-            if key in self.pocket_grid_color_dict :
-                cmd.color(self.pocket_grid_color_dict[key], dx)
-            pocket_dx_dict.append(dx)
-        cmd.group('PocketGrid', ' '.join(pocket_dx_dict))
-        cmd.show('dots', 'PocketGrid')
+    cmd.hide('everything', 'all')
+    cmd.show('sticks', MOLECULE)
+    cmd.show('everything', 'Voxel')
+    cmd.util.cnc('all')
 
-        cmd.enable('all')
-        cmd.disable(CARTOON)
+    cmd.bg_color('black')
+    cmd.set('dot_width', 2.5)
+
+    cmd.save(pse_path)
+
+def visualize_complex(
+    pse_path: str,
+    ligand_rdmol: Mol,
+    protein_rdmol: Mol,
+    ligand_grid_dict: Dict[str, ArrayLike],
+    protein_grid_dict: Dict[str, ArrayLike],
+    center: ArrayLike,
+    resolution: str,
+) :
+    __launch_pymol()
+    cmd.set_color('aqua', '[0, 150, 255]')
+
+    temp_dir = tempfile.TemporaryDirectory()
+    temp_dirpath = Path(temp_dir.name)
+    temp_ligand_path = str(temp_dirpath / f'{LIGAND}.sdf')
+    temp_protein_path = str(temp_dirpath / f'{PROTEIN}.pdb')
+    temp_grid_path = str(temp_dirpath / 'grid.dx')
+
+    __save_rdmol(ligand_rdmol, temp_ligand_path)
+    cmd.load(temp_ligand_path)
+    cmd.color('green', LIGAND)
+
+    __save_rdmol(protein_rdmol, temp_protein_path)
+    cmd.load(temp_protein_path)
+    cmd.copy(CARTOON, PROTEIN)
+    cmd.color('aqua', PROTEIN)
+    cmd.color('cyan', CARTOON)
+
+    cmd.group('Molecule', f'{LIGAND} {PROTEIN} {CARTOON}')
+
+    ligand_dx_dict = []
+    for key, grid in ligand_grid_dict.items() :
+        write_grid_to_dx_file(temp_grid_path, grid, center, resolution)
+        cmd.load(temp_grid_path)
+        dx = 'Ligand_' + key
+        cmd.set_name('grid', dx)
+        if key in ligand_grid_color_dict :
+            cmd.color(ligand_grid_color_dict[key], dx)
+        ligand_dx_dict.append(dx)
+    cmd.group('LigandVoxel', ' '.join(ligand_dx_dict))
+
+    protein_dx_dict = []
+    for key, grid in protein_grid_dict.items() :
+        write_grid_to_dx_file(temp_grid_path, grid, center, resolution)
+        cmd.load(temp_grid_path)
+        dx = 'Protein_' + key
+        cmd.set_name('grid', dx)
+        if key in protein_grid_color_dict :
+            cmd.color(protein_grid_color_dict[key], dx)
+        protein_dx_dict.append(dx)
+    cmd.group('ProteinVoxel', ' '.join(protein_dx_dict))
+
+    temp_dir.cleanup()
+
+    cmd.enable('all')
+
+    cmd.hide('everything', 'all')
+    cmd.show('sticks', LIGAND)
+    cmd.show('sticks', PROTEIN)
+    cmd.show('cartoon', CARTOON)
+    cmd.show('everything', 'LigandVoxel')
+    cmd.show('everything', 'ProteinVoxel')
+    cmd.util.cnc('all')
+
+    cmd.disable(CARTOON)
+    cmd.bg_color('black')
+    cmd.set('dot_width', 2.5)
+
+    cmd.save(pse_path)
             
-        self.set_final_representation()
-        cmd.save(pse_path)
-        os.remove('tmp_pocket.pdb')
-        os.remove('tmp_ligand.sdf')
-        os.remove('tmp_grid.dx')
-
-    def set_initial_representations(self):
-        """General settings for PyMOL"""
-        cmd.set('depth_cue', 0)  # Turn off depth cueing (no fog)
-        cmd.set('cartoon_side_chain_helper', 1)  # Improve combined visualization of sticks and cartoon
-        cmd.set('cartoon_fancy_helices', 1)  # Nicer visualization of helices (using tapered ends)
-        cmd.set('transparency_mode', 1)  # Turn on multilayer transparency
-        cmd.set('dash_radius', 0.05)
-
-        """Defines a colorset with matching colors. Provided by Joachim."""
-        cmd.set_color('myblue', '[43, 131, 186]')
-        cmd.set_color('mylightblue', '[158, 202, 225]')
-
-        # Set clipping planes for full view
-        cmd.clip('far', -1000)
-        cmd.clip('near', 1000)
-
-    def set_final_representation(self) :
-        cmd.bg_color('black')
-        cmd.set('dot_width', 2.0)
-
-    def start_pymol(self, options='-pcq'):
-        """Starts up PyMOL and sets general options. Quiet mode suppresses all PyMOL output.
-        Command line options can be passed as the second argument."""
-        pymol.pymol_argv = ['pymol', '%s' % options]
-        pymol.finish_launching(args=['pymol', options, '-K'])
-        cmd.reinitialize()
-        """General settings for PyMOL"""
-        self.set_initial_representations()
-        cmd.feedback('disable', 'all', 'everything')
-
-    def set_initial_representations(self):
-        """General settings for PyMOL"""
-        self.standard_settings()
-        cmd.set('dash_gap', 0)  # Show not dashes, but lines for the pliprofiler
-        cmd.set('ray_shadow', 0)  # Turn on ray shadows for clearer ray-traced images
-        cmd.set('cartoon_color', 'mylightblue')
-
-        # Set clipping planes for full view
-        cmd.clip('far', -1000)
-        cmd.clip('near', 1000)
-
-    def standard_settings(self):
-        """Sets up standard settings for a nice visualization."""
-        cmd.set('bg_rgb', [1.0, 1.0, 1.0])  # White background
-        cmd.set('depth_cue', 0)  # Turn off depth cueing (no fog)
-        cmd.set('cartoon_side_chain_helper', 1)  # Improve combined visualization of sticks and cartoon
-        cmd.set('cartoon_fancy_helices', 1)  # Nicer visualization of helices (using tapered ends)
-        cmd.set('transparency_mode', 1)  # Turn on multilayer transparency
-        cmd.set('dash_radius', 0.05)
-        self.set_custom_colorset()
-
-    @staticmethod
-    def set_custom_colorset():
-        """Defines a colorset with matching colors. Provided by Joachim."""
-        cmd.set_color('myorange', '[253, 174, 97]')
-        cmd.set_color('mygreen', '[171, 221, 164]')
-        cmd.set_color('myred', '[215, 25, 28]')
-        cmd.set_color('myblue', '[43, 131, 186]')
-        cmd.set_color('mylightblue', '[158, 202, 225]')
-        cmd.set_color('mylightgreen', '[229, 245, 224]')
-
-def save_rdmol(rdmol, save_path, coords = None) :
+def __save_rdmol(rdmol, save_path, coords = None) :
     rdmol = Chem.Mol(rdmol)
     if coords is not None :
         conf = rdmol.GetConformer()

@@ -1,4 +1,4 @@
-from pymolgrid.pymol import PyMOLVisualizer
+from pymolgrid.pymol import visualize_complex
 
 from rdkit import Chem
 from rdkit.Chem import Mol
@@ -15,7 +15,6 @@ def apply_coord(rdmol: Mol, coords: ArrayLike) -> Mol :
 def split_channels(grid: ArrayLike, channel_names: List[str]) -> Dict[str, ArrayLike]:
     return {name: grid[i] for i, name in enumerate(channel_names)}
 
-visualizer = PyMOLVisualizer()
 def draw_pse(pse_path, ligand_rdmol, pocket_rdmol, ligand_grids, pocket_grids, \
         ligand_channels, pocket_channels, center, resolution, new_coords = None) :
     if new_coords is not None :
@@ -29,7 +28,7 @@ def draw_pse(pse_path, ligand_rdmol, pocket_rdmol, ligand_grids, pocket_grids, \
     ligand_grid_dict = split_channels(ligand_grids, ligand_channels) 
     pocket_grid_dict = split_channels(pocket_grids, pocket_channels) 
     
-    visualizer.run(pse_path, ligand_rdmol, pocket_rdmol, \
+    visualize_complex(pse_path, ligand_rdmol, pocket_rdmol, \
             ligand_grid_dict, pocket_grid_dict, \
             center, resolution
     )
