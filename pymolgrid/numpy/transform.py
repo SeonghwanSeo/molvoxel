@@ -30,7 +30,7 @@ class RandomTransform() :
         else :
             quaternion = None
         if self.random_translation > 0.0:
-            translation = (np.random.rand(1,3) - 0.5) * (2 * random_translation)
+            translation = np.random.uniform(-random_translation, random_translation, size=(1,3))
         else :
             translation = None
         return T(translation, quaternion)
@@ -70,7 +70,7 @@ def do_random_transform(
         quaternion = None
 
     if (random_translation is not False) and (random_translation is not None) and (random_translation > 0.0) :
-        translation = (np.random.rand(1,3) - 0.5) * (2 * random_translation)
+        translation = np.random.uniform(-random_translation, random_translation, size=(1,3))
     else :
         translation = None
     

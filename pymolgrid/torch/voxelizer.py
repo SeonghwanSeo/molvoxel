@@ -3,8 +3,7 @@ import torch
 import itertools
 
 from torch import Tensor, FloatTensor, LongTensor, BoolTensor
-from typing import Tuple, Union, Optional, Dict, List
-from torch_scatter import scatter_add
+from typing import Tuple, Union, Optional, Dict, List, Callable
 
 from pymolgrid.base import BaseVoxelizer
 from .transform import do_random_transform
@@ -106,6 +105,34 @@ class Voxelizer(BaseVoxelizer) :
         self,
         coords: FloatTensor,
         center: FloatTensor,
+        channels: Union[FloatTensor, LongTensor],
+        radii: Union[float, FloatTensor],
+        random_translation: float = 0.0,
+        random_rotation: bool = False,
+        out: Optional[FloatTensor] = None
+    ) -> FloatTensor :
+        """
+        coords: (V, 3)
+        center: (3,)
+        channels: (V, C) or (V,)
+        radii: scalar or (V, ) of (C, )
+        random_translation: float (nonnegative)
+        random_rotation: bool
+
+        out: (C,D,H,W)
+        """
+        if channels.dim() == 1 :
+            types = channels
+            return self.forward_type(coords, center, types, radii, random_translation, random_rotation, out)
+        else :
+            features = channels
+            return self.forward_feature(coords, center, features, radii, random_translation, random_rotation, out)
+
+    def forward_mol(
+        self,
+        rdmol,
+        center: FloatTensor,
+        getter: 
         channels: Union[FloatTensor, LongTensor],
         radii: Union[float, FloatTensor],
         random_translation: float = 0.0,
@@ -375,10 +402,10 @@ class Voxelizer(BaseVoxelizer) :
         """
         D, H, W, _ = grid.size()
         grid = grid.view(-1, 3)
-        res = self._calc_grid(coords, radii, grid)  # (V, D*H*W)
-        res = res.view(-1, D, H, W)                 # (V, D, H, W)
-        scatter_add(res, types, dim=0, out=out)
-        return out
+        res = self._calc_grid(coords, radii, grid)          # (V, D*H*W)
+        res = res.view(-1, D, H, W)                         # (V, D, H, W)
+        types = types.view(-1, 1, 1, 1).expand(res.size())  # (V, D, H, W)
+        return out.scatter_add_(0, types, res)
 
     """ COMMON BLOCK DIVISION """
     def _get_overlap(
