@@ -56,7 +56,7 @@ out = voxelizer(coords, center, atom_features, radii)       # (5, 32, 32, 32)
 ```shell
 # Required: numpy, scipy
 # Not Required, but Recommended: RDKit
-# Optional - PyTorch : torch & torch_scatter
+# Optional - PyTorch : torch
 # Optional - Visualization : pymol-open-source
 git clone https://github.com/SeonghwanSeo/pymolgrid.git
 cd pymolgrid/

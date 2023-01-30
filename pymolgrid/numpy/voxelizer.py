@@ -19,6 +19,7 @@ atom_size: radii * atom_scale           # atom boundary
 """
 
 class Voxelizer(BaseVoxelizer) :
+    LIB='Numpy'
     def __init__(
         self,
         resolution: float = 0.5,
@@ -275,7 +276,7 @@ class Voxelizer(BaseVoxelizer) :
 
         # Set Coordinate
         coords = coords - center.reshape(1, 3)
-        coords = do_random_transform(coords, None, random_translation, random_rotation)
+        coords = self.do_random_transform(coords, None, random_translation, random_rotation)
 
         # DataType
         if coords.dtype != np.float64 :     # cdist support only float64
@@ -456,3 +457,13 @@ class Voxelizer(BaseVoxelizer) :
         out = np.exp(np.multiply(np.power(dr, 2, dr), -2, dr), dr)
         out[dr > self.atom_scale] = 0
         return out
+
+    def asarray(self, array, typ) :
+        if typ is float :
+            return np.array(array, dtype=self.fp)
+        elif typ is int :
+            return np.array(array, dtype=np.int_)
+
+    @staticmethod
+    def do_random_transform(coords, center, random_translation, random_rotation) :
+        return do_random_transform(coords, center, random_translation, random_rotation)

@@ -14,6 +14,7 @@ atom_size: radii * atom_scale           # atom boundary
 """
 
 class Voxelizer(BaseVoxelizer) :
+    LIB='PyTorch'
     def __init__(
         self,
         resolution: float = 0.5,
@@ -487,3 +488,13 @@ class Voxelizer(BaseVoxelizer) :
         out = dr.pow_(2).mul_(-2.0).exp_()
         out.masked_fill_(dr > self.atom_scale, 0)
         return out
+
+    def asarray(self, array, typ) :
+        if typ is float :
+            return torch.FloatTensor(array, device=self.device)
+        elif typ is int :
+            return torch.LongTensor(array, device=self.device)
+
+    @staticmethod
+    def do_random_transform(coords, center, random_translation, random_rotation) :
+        return do_random_transform(coords, center, random_translation, random_rotation)
