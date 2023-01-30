@@ -1,5 +1,6 @@
 import math
 import torch
+import numpy as np
 import itertools
 
 from torch import Tensor, FloatTensor, LongTensor, BoolTensor
@@ -18,7 +19,7 @@ class Voxelizer(BaseVoxelizer) :
     def __init__(
         self,
         resolution: float = 0.5,
-        dimension: int = 48,
+        dimension: int = 64,
         atom_scale: float = 1.5,
         density: str = 'gaussian',
         channel_wise_radii: bool = False,
@@ -133,7 +134,6 @@ class Voxelizer(BaseVoxelizer) :
         self,
         rdmol,
         center: FloatTensor,
-        getter: 
         channels: Union[FloatTensor, LongTensor],
         radii: Union[float, FloatTensor],
         random_translation: float = 0.0,
@@ -268,26 +268,26 @@ class Voxelizer(BaseVoxelizer) :
         """
         features = features.T                                               # (V, C) -> (C, V)
         D, H, W, _ = grid.size()
-        grid = grid.view(-1, 3)                                             # (D*H*W, 3)
-        if out.is_contiguous() :
-            _out = out.view(-1, D*H*W)
-            if self.channel_wise_radii :
+        grid = grid.view(-1, 3)                                             # (DHW, 3)
+        if self.channel_wise_radii :
+            if out.is_contiguous() :
+                _out = out.view(-1, D*H*W)
                 for type_idx in range(features.size(0)) :
                     typ = features[type_idx]                                # (V,)
-                    res = self._calc_grid(coords, radii[type_idx], grid)    # (V, D*H*W)
-                    torch.matmul(typ, res, out=_out[type_idx])              # (D, H, W)
+                    res = self._calc_grid(coords, radii[type_idx], grid)    # (V, DHW)
+                    torch.matmul(typ, res, out=_out[type_idx])              # (V,) @ (V, DHW) -> (DHW) = (D, H, W)
             else :
-                res = self._calc_grid(coords, radii, grid)                  # (V, D*H*W)
-                torch.matmul(features, res, out=_out)                       # (C, D*H*W)
-        else :
-            if self.channel_wise_radii :
                 for type_idx in range(features.size(0)) :
                     typ = features[type_idx]                                # (V,)
-                    res = self._calc_grid(coords, radii[type_idx], grid)    # (V, D*H*W)
+                    res = self._calc_grid(coords, radii[type_idx], grid)    # (V, DHW)
                     out[type_idx] = torch.matmul(typ, res).view(D, H, W)    # (D, H, W)
+        else :
+            if out.is_contiguous() :
+                res = self._calc_grid(coords, radii, grid)                  # (V, DHW)
+                torch.mm(features, res, out=out.view(-1, D*H*W))            # (V,C) @ (V, DHW) -> (C, DHW)
             else :
-                res = self._calc_grid(coords, radii, grid)                  # (V, D*H*W)
-                out[:] = torch.matmul(features, res).view(-1, D, H, W)      # (C, D, H, W)
+                res = self._calc_grid(coords, radii, grid)                  # (V, DHW)
+                out[:] = torch.mm(features, res).view(-1, D, H, W)          # (C, D, H, W)
         return out
 
     """ INDEX """
@@ -489,11 +489,20 @@ class Voxelizer(BaseVoxelizer) :
         out.masked_fill_(dr > self.atom_scale, 0)
         return out
 
-    def asarray(self, array, typ) :
-        if typ is float :
-            return torch.FloatTensor(array, device=self.device)
-        elif typ is int :
-            return torch.LongTensor(array, device=self.device)
+    def asarray(self, array, obj) :
+        if isinstance(array, np.ndarray) :
+            array = torch.from_numpy(array)
+        if isinstance(array, torch.Tensor) :
+            if obj in ['coords', 'center', 'feature', 'radii'] :
+                return array.to(device = self.device, dtype=torch.float)
+            elif obj == 'type' : 
+                return array.to(device = self.device, dtype=torch.long)
+        else :
+            if obj in ['coords', 'center', 'feature', 'radii'] :
+                return torch.tensor(array, dtype=torch.float, device=self.device)
+            elif obj == 'type' : 
+                return torch.tensor(array, dtype=torch.long, device=self.device)
+        raise ValueError("obj should be ['coords', center', 'type', 'feature', 'radii']")
 
     @staticmethod
     def do_random_transform(coords, center, random_translation, random_rotation) :

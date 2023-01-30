@@ -1,4 +1,6 @@
 import math
+import types
+import functools
 
 from typing import Tuple
 
@@ -38,3 +40,7 @@ class BaseVoxelizer() :
     @property
     def width(self) -> float :
         return self._width
+
+    def decorate(self, wrapper) :
+        self.wrapper = wrapper
+        self.run = functools.partial(wrapper.run, self)

@@ -1,10 +1,12 @@
 import os
 from pymolgrid.torch import Voxelizer, RandomTransform
+import numpy as np
 import torch
 from rdkit import Chem
+import sys
 try :
-    a=  0/0
     from utils import draw_pse
+    assert sys.argv[1] == '-y'
     pymol = True
 except :
     draw_pse = (lambda *x, **kwargs: None)
@@ -28,10 +30,10 @@ pocket_path = './10gs/pocket.pdb'
 ligand_rdmol = Chem.SDMolSupplier(ligand_path)[0]
 pocket_rdmol = Chem.MolFromPDBFile(pocket_path)
 
-ligand_coords = torch.FloatTensor(ligand_rdmol.GetConformer().GetPositions())
-ligand_center = ligand_coords.mean(dim=0)
-pocket_coords = torch.FloatTensor(pocket_rdmol.GetConformer().GetPositions())
-coords = torch.cat([ligand_coords, pocket_coords], dim=0)
+ligand_coords = ligand_rdmol.GetConformer().GetPositions()
+ligand_center = ligand_coords.mean(axis=0)
+pocket_coords = pocket_rdmol.GetConformer().GetPositions()
+coords = np.concatenate([ligand_coords, pocket_coords], axis=0)
 center = ligand_center
 
 """ Atom Types """
@@ -47,21 +49,24 @@ num_pocket_channels = len(pocket_channels)
 num_channels = num_ligand_channels + num_pocket_channels
 ligand_type_dict = {'C': 0, 'N': 1, 'O': 2, 'S': 3}
 pocket_type_dict = {'C': 4, 'N': 5, 'O': 6, 'S': 7}
-ligand_types = torch.LongTensor([ligand_type_dict[atom.GetSymbol()] for atom in ligand_rdmol.GetAtoms()])
-pocket_types = torch.LongTensor([pocket_type_dict[atom.GetSymbol()] for atom in pocket_rdmol.GetAtoms()])
-atom_types = torch.cat([ligand_types, pocket_types], dim=0)
+ligand_types = [ligand_type_dict[atom.GetSymbol()] for atom in ligand_rdmol.GetAtoms()]
+pocket_types = [pocket_type_dict[atom.GetSymbol()] for atom in pocket_rdmol.GetAtoms()]
+atom_types = ligand_types + pocket_types
 
-channel_radii = torch.ones((num_channels,))
+channel_radii = np.ones((num_channels,))
 channel_radii[:4] = 2.0
-atom_radii = torch.ones((coords.size(0),))
+atom_radii = np.ones((coords.shape[0],))
 atom_radii[100:] = 2.0
+
+coords = voxelizer.asarray(coords, 'coords')
+center = voxelizer.asarray(center, 'center')
+atom_types = voxelizer.asarray(atom_types, 'type')
+channel_radii = voxelizer.asarray(channel_radii, 'radii')
+atom_radii = voxelizer.asarray(atom_radii, 'radii')
 
 grid = voxelizer.get_empty_grid(num_channels)
 grid_small = voxelizer_small.get_empty_grid(num_channels)
 grid_hr = voxelizer_hr.get_empty_grid(num_channels)
-
-coords, atom_types, center, channel_radii, atom_radii = \
-        coords.to(device), atom_types.to(device), center.to(device), channel_radii.to(device), atom_radii.to(device)
 
 ligand_grid, pocket_grid = torch.split(grid, (num_ligand_channels, num_pocket_channels))
 ligand_grid_small, pocket_grid_small = torch.split(grid_small, (num_ligand_channels, num_pocket_channels))
@@ -133,21 +138,24 @@ def get_features(atom, is_pocket) :
     elif symbol == 'S'      : res[idx+3] = 1
     if atom.GetIsAromatic() : res[idx+4] = 1
     return res
-ligand_features = torch.FloatTensor([get_features(atom, False) for atom in ligand_rdmol.GetAtoms()])
-pocket_features = torch.FloatTensor([get_features(atom, True) for atom in pocket_rdmol.GetAtoms()])
-atom_features = torch.cat([ligand_features, pocket_features], dim=0)
+ligand_features = [get_features(atom, False) for atom in ligand_rdmol.GetAtoms()]
+pocket_features = [get_features(atom, True) for atom in pocket_rdmol.GetAtoms()]
+atom_features = ligand_features + pocket_features
 
-channel_radii = torch.ones((num_channels,))
+channel_radii = np.ones((num_channels,))
 channel_radii[:4] = 2.0
-atom_radii = torch.ones((coords.size(0),))
+atom_radii = np.ones((coords.shape[0],))
 atom_radii[100:] = 2.0
+
+coords = voxelizer.asarray(coords, 'coords')
+center = voxelizer.asarray(center, 'center')
+atom_features = voxelizer.asarray(atom_features, 'feature')
+channel_radii = voxelizer.asarray(channel_radii, 'radii')
+atom_radii = voxelizer.asarray(atom_radii, 'radii')
 
 grid = voxelizer.get_empty_grid(num_channels)
 grid_small = voxelizer_small.get_empty_grid(num_channels)
 grid_hr = voxelizer_hr.get_empty_grid(num_channels)
-
-coords, atom_features, center, channel_radii, atom_radii = \
-        coords.to(device), atom_features.to(device), center.to(device), channel_radii.to(device), atom_radii.to(device)
 
 ligand_grid, pocket_grid = torch.split(grid, (num_ligand_channels, num_pocket_channels))
 ligand_grid_small, pocket_grid_small = torch.split(grid_small, (num_ligand_channels, num_pocket_channels))

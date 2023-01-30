@@ -9,8 +9,8 @@ from scipy.spatial.distance import cdist
 from pymolgrid.base import BaseVoxelizer
 from .transform import do_random_transform
 
-NDArrayInt = NDArray[np.int_]
-NDArrayFloat = NDArray[np.float_]
+NDArrayInt = NDArray[np.int16]
+NDArrayFloat = Union[NDArray[np.float32], NDArray[np.float64]]
 NDArrayBool = NDArray[np.bool_]
 
 """
@@ -23,7 +23,7 @@ class Voxelizer(BaseVoxelizer) :
     def __init__(
         self,
         resolution: float = 0.5,
-        dimension: int = 48,
+        dimension: int = 64,
         atom_scale: float = 1.5,
         density: str = 'gaussian',
         channel_wise_radii: bool = False,
@@ -227,28 +227,28 @@ class Voxelizer(BaseVoxelizer) :
 
         out: (C, D, H, W)
         """
-        features = features.T                                             # (V, C) -> (C, V)
+        features = features.T                                               # (V, C) -> (C, V)
         D, H, W, _ = grid.shape
-        grid = grid.reshape(-1, 3)                                                 # (D*H*W, 3)
-        if out.data.contiguous :
-            _out = out.reshape(-1, D*H*W)
-            if self.channel_wise_radii :
+        grid = grid.reshape(-1, 3)                                          # (DHW, 3)
+        if self.channel_wise_radii :
+            if out.data.contiguous :
+                _out = out.reshape(-1, D*H*W)
                 for type_idx in range(features.shape[0]) :
-                    typ = features[type_idx]                                 # (V,)
-                    res = self._calc_grid(coords, radii[type_idx], grid)       # (V, D*H*W)
-                    np.matmul(typ, res, out=_out[type_idx])
+                    typ = features[type_idx]                                # (V,)
+                    res = self._calc_grid(coords, radii[type_idx], grid)    # (V, DHW)
+                    np.matmul(typ, res, out=_out[type_idx])                 # (V,) @ (V, DHW) -> (DHW) = (D, H, W)
             else :
-                res = self._calc_grid(coords, radii, grid)                     # (V, D*H*W)
-                np.matmul(features, res, out=_out)                           # (C, D*H*W)
+                for type_idx in range(features.shape[0]) :
+                    typ = features[type_idx]                                # (V,)
+                    res = self._calc_grid(coords, radii[type_idx], grid)    # (V, DHW)
+                    out[type_idx] = np.matmul(typ, res).reshape(D, H, W)    # (V,) @ (V, DHW) -> (DHW) = (D, H, W)
         else :
-            if self.channel_wise_radii :
-                for type_idx in range(features.shape[0]) :
-                    typ = features[type_idx]                                 # (V,)
-                    res = self._calc_grid(coords, radii[type_idx], grid)  # (V, D*H*W)
-                    out[type_idx] = np.matmul(typ, res).reshape(D, H, W)        # (D, H, W)
+            if out.data.contiguous :
+                res = self._calc_grid(coords, radii, grid)                  # (V, DHW)
+                np.matmul(features, res, out=out.reshape(-1, D*H*W))        # (C, V) @ (V, DHW) -> (C, DHW) = (C, D, H, W)
             else :
-                res = self._calc_grid(coords, radii, grid)                # (V, D*H*W)
-                out[:] = np.matmul(features, res).reshape(-1, D, H, W)       # (C, D, H, W)
+                res = self._calc_grid(coords, radii, grid)                  # (V, DHW)
+                out[:] = np.matmul(features, res).reshape(-1, D, H, W)      # (C, V) @ (V, DHW) -> (C, DHW) = (C, D, H, W)
         return out
 
     """ INDEX """
@@ -281,6 +281,8 @@ class Voxelizer(BaseVoxelizer) :
         # DataType
         if coords.dtype != np.float64 :     # cdist support only float64
             coords = coords.astype(np.float64)
+        if types.dtype != np.int16 :
+            types = types.astype(np.int16)
         if not np.isscalar(radii) and radii.dtype != self.fp :
             radii = radii.astype(self.fp)
 
@@ -458,11 +460,29 @@ class Voxelizer(BaseVoxelizer) :
         out[dr > self.atom_scale] = 0
         return out
 
-    def asarray(self, array, typ) :
-        if typ is float :
-            return np.array(array, dtype=self.fp)
-        elif typ is int :
-            return np.array(array, dtype=np.int_)
+    @staticmethod
+    def _typechange(array, dtype) :
+        if array.dtype != dtype :
+            return array.astype(dtype)
+        else : 
+            return array
+
+    def asarray(self, array, obj) :
+        if isinstance(array, np.ndarray) :
+            if obj in ['coords', 'center'] :
+                return self._typechange(array, np.float64)
+            elif obj in ['feature', 'radii'] :
+                return self._typechange(array, self.fp)
+            elif obj == 'type' :
+                return self._typechange(array, np.int16)
+        else :
+            if obj in ['coords', 'center'] :
+                return np.array(array, dtype=np.float64)
+            elif obj in ['feature', 'radii'] :
+                return np.array(array, dtype=np.float32)
+            elif obj == 'type' :
+                return np.array(array, dtype=np.int16)
+        raise ValueError("obj should be ['coords', center', 'type', 'feature', 'radii']")
 
     @staticmethod
     def do_random_transform(coords, center, random_translation, random_rotation) :

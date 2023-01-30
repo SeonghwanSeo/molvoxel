@@ -2,16 +2,18 @@ import os
 from pymolgrid import Voxelizer, RandomTransform
 import numpy as np
 from rdkit import Chem
+import sys
 try :
     from utils import draw_pse
+    assert sys.argv[1] == '-y'
     pymol = True
 except :
     draw_pse = (lambda *x, **kwargs: None)
     pymol = False
 
 voxelizer = Voxelizer(resolution=0.5, dimension=48, atom_scale=1.5, density='gaussian', \
-                    channel_wise_radii=False) # Default
-voxelizer_small = Voxelizer(0.5, 16, blockdim = 16) # 0.5, 48
+                    channel_wise_radii=False)
+voxelizer_small = Voxelizer(0.5, 16, blockdim = 16)
 voxelizer_hr = Voxelizer(0.4, 64)
 transform = RandomTransform(random_translation=0.5, random_rotation=True)
 
@@ -41,14 +43,20 @@ num_pocket_channels = len(pocket_channels)
 num_channels = num_ligand_channels + num_pocket_channels
 ligand_type_dict = {'C': 0, 'N': 1, 'O': 2, 'S': 3}
 pocket_type_dict = {'C': 4, 'N': 5, 'O': 6, 'S': 7}
-ligand_types = np.array([ligand_type_dict[atom.GetSymbol()] for atom in ligand_rdmol.GetAtoms()])
-pocket_types = np.array([pocket_type_dict[atom.GetSymbol()] for atom in pocket_rdmol.GetAtoms()])
-atom_types = np.concatenate([ligand_types, pocket_types], axis=0)
+ligand_types = [ligand_type_dict[atom.GetSymbol()] for atom in ligand_rdmol.GetAtoms()]
+pocket_types = [pocket_type_dict[atom.GetSymbol()] for atom in pocket_rdmol.GetAtoms()]
+atom_types = ligand_types + pocket_types
 
 channel_radii = np.ones((num_channels,))
 channel_radii[:4] = 2.0
 atom_radii = np.ones((coords.shape[0],))
 atom_radii[100:] = 2.0
+
+coords = voxelizer.asarray(coords, 'coords')
+center = voxelizer.asarray(center, 'center')
+atom_types = voxelizer.asarray(atom_types, 'type')
+channel_radii = voxelizer.asarray(channel_radii, 'radii')
+atom_radii = voxelizer.asarray(atom_radii, 'radii')
 
 grid = voxelizer.get_empty_grid(num_channels)
 grid_small = voxelizer_small.get_empty_grid(num_channels)
@@ -124,9 +132,9 @@ def get_features(atom, is_pocket) :
     elif symbol == 'S'      : res[idx+3] = 1.0
     if atom.GetIsAromatic() : res[idx+4] = 1.0
     return res
-ligand_features = np.array([get_features(atom, False) for atom in ligand_rdmol.GetAtoms()])
-pocket_features = np.array([get_features(atom, True) for atom in pocket_rdmol.GetAtoms()])
-atom_features = np.concatenate([ligand_features, pocket_features], axis=0)
+ligand_features = [get_features(atom, False) for atom in ligand_rdmol.GetAtoms()]
+pocket_features = [get_features(atom, True) for atom in pocket_rdmol.GetAtoms()]
+atom_features = ligand_features + pocket_features
 
 channel_radii = np.ones((num_channels,))
 channel_radii[:4] = 2.0
@@ -136,6 +144,12 @@ atom_radii[100:] = 2.0
 grid = voxelizer.get_empty_grid(num_channels)
 grid_small = voxelizer_small.get_empty_grid(num_channels)
 grid_hr = voxelizer_hr.get_empty_grid(num_channels)
+
+coords = voxelizer.asarray(coords, 'coords')
+center = voxelizer.asarray(center, 'center')
+atom_features = voxelizer.asarray(atom_features, 'feature')
+channel_radii = voxelizer.asarray(channel_radii, 'radii')
+atom_radii = voxelizer.asarray(atom_radii, 'radii')
 
 ligand_grid, pocket_grid = np.split(grid, [num_ligand_channels], axis=0)
 ligand_grid_small, pocket_grid_small = np.split(grid_small, [num_ligand_channels], axis=0)
