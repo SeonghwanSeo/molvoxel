@@ -30,24 +30,21 @@ class RandomTransform() :
         else :
             quaternion = None
         if self.random_translation > 0.0:
-            translation = torch.rand((1,3).sub(0.5)).mul(2 * random_translation)
+            translation = (torch.rand((1,3)) - 0.5) * (2 * random_translation)
         else :
             translation = None
         return T(translation, quaternion)
 
 def __do_transform(
     coords: FloatTensor,
-    center: Union[Tuple[float, float, float], FloatTensor, None] = None,
+    center: Optional[FloatTensor] = None,
     translation: Optional[FloatTensor] = None,
     quaternion: Optional[Q] = None,
 ) -> FloatTensor:
     device = coords.device
     if quaternion is not None :
         if center is not None :
-            if not isinstance(center, Tensor) :
-                center = torch.FloatTensor([center], dtype=device)
-            if center.size() == (3,) :
-                center = center.unsqueeze(0)
+            center = center.view(1,3)
             coords = apply_quaternion(coords - center, quaternion)
             coords.add_(center)
         else :
@@ -62,7 +59,7 @@ def __do_transform(
 
 def do_random_transform(
     coords: FloatTensor,
-    center: Union[Tuple[float, float, float], FloatTensor, None] = None,
+    center: Optional[FloatTensor] = None,
     random_translation: Optional[float] = 0.0,
     random_rotation: bool = False,
 ) -> FloatTensor:
@@ -73,8 +70,8 @@ def do_random_transform(
     else :
         quaternion = None
 
-    if (random_translation is not False) and (random_translation is not None) and (random_translation > 0.0) :
-        translation = torch.rand((1,3), device=device).sub(0.5).mul(2 * random_translation)
+    if (random_translation is not None) and (random_translation > 0.0) :
+        translation = (torch.rand((1,3), device=device) - 0.5) * (2 * random_translation)
     else :
         translation = None
     

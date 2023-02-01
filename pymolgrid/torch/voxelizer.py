@@ -106,7 +106,7 @@ class Voxelizer(BaseVoxelizer) :
     def forward(
         self,
         coords: FloatTensor,
-        center: FloatTensor,
+        center: Optional[FloatTensor],
         channels: Union[FloatTensor, LongTensor],
         radii: Union[float, FloatTensor],
         random_translation: float = 0.0,
@@ -125,53 +125,26 @@ class Voxelizer(BaseVoxelizer) :
         """
         if channels.dim() == 1 :
             types = channels
-            return self.forward_type(coords, center, types, radii, random_translation, random_rotation, out)
+            return self.forward_types(coords, center, types, radii, random_translation, random_rotation, out)
         else :
             features = channels
-            return self.forward_feature(coords, center, features, radii, random_translation, random_rotation, out)
-
-    def forward_mol(
-        self,
-        rdmol,
-        center: FloatTensor,
-        channels: Union[FloatTensor, LongTensor],
-        radii: Union[float, FloatTensor],
-        random_translation: float = 0.0,
-        random_rotation: bool = False,
-        out: Optional[FloatTensor] = None
-    ) -> FloatTensor :
-        """
-        coords: (V, 3)
-        center: (3,)
-        channels: (V, C) or (V,)
-        radii: scalar or (V, ) of (C, )
-        random_translation: float (nonnegative)
-        random_rotation: bool
-
-        out: (C,D,H,W)
-        """
-        if channels.dim() == 1 :
-            types = channels
-            return self.forward_type(coords, center, types, radii, random_translation, random_rotation, out)
-        else :
-            features = channels
-            return self.forward_feature(coords, center, features, radii, random_translation, random_rotation, out)
+            return self.forward_features(coords, center, features, radii, random_translation, random_rotation, out)
 
     __call__ = forward
 
     """ VECTOR """
     @torch.no_grad()
-    def forward_feature(
+    def forward_features(
         self,
         coords: FloatTensor,
-        center: FloatTensor,
+        center: Optional[FloatTensor],
         features: FloatTensor,
         radii: Union[float, FloatTensor],
         random_translation: float = 0.0,
         random_rotation: bool = False,
         out: Optional[FloatTensor] = None
     ) -> FloatTensor :
-        """
+        """unsqueeze
         coords: (V, 3)
         center: (3,)
         features: (V, C)
@@ -181,10 +154,11 @@ class Voxelizer(BaseVoxelizer) :
 
         out: (C,D,H,W)
         """
-        self._check_args_feature(coords, features, radii, out)
+        self._check_args_features(coords, features, radii, out)
 
         # Set Coordinate
-        coords = coords - center.unsqueeze(0)
+        if center is not None :
+            coords = coords - center.view(1, 3)
         coords = do_random_transform(coords, None, random_translation, random_rotation)
 
         # Set Out
@@ -227,14 +201,14 @@ class Voxelizer(BaseVoxelizer) :
                 grid_block = self.grid_block_dict[(xidx, yidx, zidx)]
                 coords_block, features_block = coords[overlap], features[overlap]
                 radii_block = radii[overlap] if is_atom_wise_radii else radii
-                self._set_grid_feature(coords_block, features_block, radii_block, grid_block, out_block)
+                self._set_grid_features(coords_block, features_block, radii_block, grid_block, out_block)
         else :
             grid = self.grid
-            self._set_grid_feature(coords, features, radii, grid, out)
+            self._set_grid_features(coords, features, radii, grid, out)
         
         return out
 
-    def _check_args_feature(self, coords: FloatTensor, features: FloatTensor, radii: Union[float,FloatTensor], 
+    def _check_args_features(self, coords: FloatTensor, features: FloatTensor, radii: Union[float,FloatTensor], 
                     out: Optional[FloatTensor] = None) :
         V = coords.size(0)
         C = features.size(1)
@@ -250,7 +224,7 @@ class Voxelizer(BaseVoxelizer) :
         if out is not None :
             assert out.size() == (C, D, H, W), f'Output grid dimension incorrect: {tuple(out.size())} vs {(C,D,H,W)}'
 
-    def _set_grid_feature(
+    def _set_grid_features(
         self,
         coords: FloatTensor,
         features: FloatTensor,
@@ -292,10 +266,10 @@ class Voxelizer(BaseVoxelizer) :
 
     """ INDEX """
     @torch.no_grad()
-    def forward_type(
+    def forward_types(
         self,
         coords: FloatTensor,
-        center: FloatTensor,
+        center: Optional[FloatTensor],
         types: FloatTensor,
         radii: Union[float, FloatTensor],
         random_translation: float = 0.0,
@@ -315,7 +289,8 @@ class Voxelizer(BaseVoxelizer) :
         self._check_args_types(coords, types, radii, out)
 
         # Set Coordinate
-        coords = coords - center.unsqueeze(0)
+        if center is not None :
+            coords = coords - center.view(1, 3)
         coords = do_random_transform(coords, None, random_translation, random_rotation)
 
         # Set Out
@@ -493,16 +468,16 @@ class Voxelizer(BaseVoxelizer) :
         if isinstance(array, np.ndarray) :
             array = torch.from_numpy(array)
         if isinstance(array, torch.Tensor) :
-            if obj in ['coords', 'center', 'feature', 'radii'] :
+            if obj in ['coords', 'center', 'features', 'radii'] :
                 return array.to(device = self.device, dtype=torch.float)
-            elif obj == 'type' : 
+            elif obj == 'types' : 
                 return array.to(device = self.device, dtype=torch.long)
         else :
-            if obj in ['coords', 'center', 'feature', 'radii'] :
+            if obj in ['coords', 'center', 'features', 'radii'] :
                 return torch.tensor(array, dtype=torch.float, device=self.device)
-            elif obj == 'type' : 
+            elif obj == 'types' : 
                 return torch.tensor(array, dtype=torch.long, device=self.device)
-        raise ValueError("obj should be ['coords', center', 'type', 'feature', 'radii']")
+        raise ValueError("obj should be ['coords', center', 'types', 'features', 'radii']")
 
     @staticmethod
     def do_random_transform(coords, center, random_translation, random_rotation) :

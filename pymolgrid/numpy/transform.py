@@ -4,8 +4,9 @@ from typing import Tuple, Union, Optional
 from numpy.typing import NDArray
 from ._quaternion import random_quaternion, apply_quaternion, Q
 
+NDArrayFloat = NDArray[np.float_]
 class T() :
-    def __init__(self, translation: Optional[NDArray], quaternion: Optional[Q]) :
+    def __init__(self, translation: Optional[NDArrayFloat], quaternion: Optional[Q]) :
         self.translation = translation
         self.quaternion = quaternion
 
@@ -21,7 +22,7 @@ class RandomTransform() :
         self.random_translation = random_translation
         self.random_rotation = random_rotation
 
-    def forward(self, coords: NDArray, center: Optional[NDArray]) -> NDArray:
+    def forward(self, coords: NDArrayFloat, center: Optional[NDArrayFloat]) -> NDArrayFloat:
         return do_random_transform(coords, center, self.random_translation, self.random_rotation)
 
     def get_transform(self) -> T :
@@ -36,30 +37,27 @@ class RandomTransform() :
         return T(translation, quaternion)
 
 def __do_transform(
-    coords: NDArray,
-    center: Union[Tuple[float, float, float], NDArray, None] = None,
-    translation: Optional[NDArray] = None,
+    coords: NDArrayFloat,
+    center: Optional[NDArrayFloat] = None,
+    translation: Optional[NDArrayFloat] = None,
     quaternion: Optional[Q] = None,
-) -> NDArray:
+) -> NDArrayFloat:
     if quaternion is not None :
         if center is not None :
-            if np.shape(center) == (3,) :
-                center = np.array([center])
+            center = center.reshape(1,3)
             coords = apply_quaternion(coords - center, quaternion)
-            np.add(coords, center, coords)
+            coords += center
         else :
             coords = apply_quaternion(coords, quaternion)
-
         if translation is not None :
-            return np.add(coords, translation, coords)
-    else :
-        if translation is not None :
-            return coords + translation
+            coords += translation
+    if translation is not None :
+        coords = coords + translation
     return coords
 
 def do_random_transform(
-    coords: NDArray,
-    center: Union[Tuple[float, float, float], NDArray, None] = None,
+    coords: NDArrayFloat,
+    center: Optional[NDArrayFloat] = None,
     random_translation: Optional[float] = 0.0,
     random_rotation: bool = False,
 ) -> NDArray:
@@ -69,7 +67,7 @@ def do_random_transform(
     else :
         quaternion = None
 
-    if (random_translation is not False) and (random_translation is not None) and (random_translation > 0.0) :
+    if (random_translation is not None) and (random_translation > 0.0) :
         translation = np.random.uniform(-random_translation, random_translation, size=(1,3))
     else :
         translation = None
