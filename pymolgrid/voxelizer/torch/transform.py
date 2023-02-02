@@ -12,6 +12,22 @@ class T() :
     def __call__(self, coords, center) :
         return do_transform(coords, center, self.translation, self.quaternion)
 
+    @classmethod
+    def create(
+        cls,
+        random_translation: float = 0.0,
+        random_rotation: bool = False,
+    ) :
+        if random_translation > 0.0:
+            translation = (torch.rand((1,3)) - 0.5) * (2 * random_translation)
+        else :
+            translation = None
+        if random_rotation :
+            quaternion = random_quaternion()
+        else :
+            quaternion = None
+        return cls(translation, quaternion)
+
 class RandomTransform() :
     def __init__(
         self,
@@ -25,15 +41,7 @@ class RandomTransform() :
         return do_random_transform(coords, center, self.random_translation, self.random_rotation)
 
     def get_transform(self) -> T :
-        if self.random_rotation :
-            quaternion = random_quaternion()
-        else :
-            quaternion = None
-        if self.random_translation > 0.0:
-            translation = (torch.rand((1,3)) - 0.5) * (2 * self.random_translation)
-        else :
-            translation = None
-        return T(translation, quaternion)
+        return T.create(self.random_translation, self.random_rotation)
 
 def do_transform(
     coords: FloatTensor,
