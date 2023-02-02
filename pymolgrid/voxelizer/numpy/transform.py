@@ -11,7 +11,7 @@ class T() :
         self.quaternion = quaternion
 
     def __call__(self, coords, center) :
-        return __do_transform(coords, center, self.translation, self.quaternion)
+        return do_transform(coords, center, self.translation, self.quaternion)
 
 class RandomTransform() :
     def __init__(
@@ -31,12 +31,12 @@ class RandomTransform() :
         else :
             quaternion = None
         if self.random_translation > 0.0:
-            translation = np.random.uniform(-random_translation, random_translation, size=(1,3))
+            translation = np.random.uniform(-self.random_translation, self.random_translation, size=(1,3))
         else :
             translation = None
         return T(translation, quaternion)
 
-def __do_transform(
+def do_transform(
     coords: NDArrayFloat,
     center: Optional[NDArrayFloat] = None,
     translation: Optional[NDArrayFloat] = None,
@@ -72,4 +72,4 @@ def do_random_transform(
     else :
         translation = None
     
-    return __do_transform(coords, center, translation, quaternion)
+    return do_transform(coords, center, translation, quaternion)

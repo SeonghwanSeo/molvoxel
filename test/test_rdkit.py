@@ -1,56 +1,87 @@
 import os
-from pymolgrid import Voxelizer
-from pymolgrid.rdkit.binding import RDMolWrapper
-from pymolgrid.rdkit.getter import RDMolChannelGetter, RDAtomChannelGetter, RDBondChannelGetter
+import sys
+from pymolgrid.voxelizer import Voxelizer
+from pymolgrid.rdkit.wrapper import MolWrapper, MolSystemWrapper, ComplexWrapper
+from pymolgrid.rdkit.imagemaker import MolImageMaker, MolSystemImageMaker
+from pymolgrid.rdkit.getter import AtomTypeGetter, BondTypeGetter
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem
-import sys
-try :
-    from pymolgrid.pymol import visualize_mol, visualize_complex
-    assert sys.argv[1] == '-y'
+
+save_dir = 'result_rdkit'
+if '-y' in sys.argv :
     pymol = True
-    os.system('mkdir -p result_rdkit')
-except :
+    from pymolgrid.pymol import Visualizer
+    visualizer = Visualizer()
+    os.system(f'mkdir -p {save_dir}')
+else :
     pymol = False
+    visualizer = None
 
-voxelizer = Voxelizer(resolution=0.5, dimension=48, atom_scale=1.5, density='gaussian', \
-                    channel_wise_radii=False) # Default
-
-def atom_function(atom) :
-    dic = {6: 0, 7: 1, 8: 2, 16: 3}
-    res = [0] * 5
-    res[dic[atom.GetAtomicNum()]] = 1
-    if atom.GetIsAromatic() :
-        res[4] = 1
-    return res
-atom_getter = RDAtomChannelGetter(atom_function, ['C', 'N', 'O', 'S', 'Aromatic'])
-bond_getter = RDBondChannelGetter.default()
-mol_getter = RDMolChannelGetter(atom_getter, bond_getter, prefix='')
-wrapper = RDMolWrapper([mol_getter])
-voxelizer.decorate(wrapper)
+voxelizer = Voxelizer(dimension = 32)
 
 """ LOAD DATA """
-ligand_path = './10gs/ligand.sdf'
-pocket_path = './10gs/pocket.pdb'
+ligand_path = './10gs/10gs_ligand.sdf'
+protein_path = './10gs/10gs_protein_nowater.pdb'
 
 ligand_rdmol = Chem.SDMolSupplier(ligand_path)[0]
-pocket_rdmol = Chem.MolFromPDBFile(pocket_path)
+protein_rdmol = Chem.MolFromPDBFile(protein_path)
+
+ligand_center = ligand_rdmol.GetConformer().GetPositions().mean(axis=0)
 
 """ SINGLE MOL TEST """
-grids, inputs = voxelizer.run([ligand_rdmol], return_inputs=True)
-grid_dict = voxelizer.wrapper.split_channel(grids)[0]
+rdmol = ligand_rdmol
+center = ligand_center
+atom_getter = AtomTypeGetter(['C', 'N', 'O', 'S'])
+bond_getter = BondTypeGetter.default()
+
+imagemaker = MolImageMaker(atom_getter, None, channel_type='types')
+wrapper = MolWrapper(imagemaker, voxelizer, visualizer)
+grid = wrapper.run(rdmol, center, radii=1.0)
 if pymol :
-    visualize_mol('result_rdkit/ligand.pse', ligand_rdmol, grid_dict, inputs['center'], voxelizer.resolution)
+    wrapper.visualize(f'{save_dir}/types.pse', ligand_rdmol, grid, center)
+
+imagemaker = MolImageMaker(atom_getter, bond_getter, channel_type='types')
+wrapper = MolWrapper(imagemaker, voxelizer, visualizer)
+grid = wrapper.run(rdmol, center, radii=1.0)
+if pymol :
+    wrapper.visualize(f'{save_dir}/bond_types.pse', ligand_rdmol, grid, center)
+
+imagemaker = MolImageMaker(atom_getter, None, channel_type='features')
+wrapper = MolWrapper(imagemaker, voxelizer, visualizer)
+grid = wrapper.run(rdmol, center, radii=1.0)
+if pymol :
+    wrapper.visualize(f'{save_dir}/features.pse', ligand_rdmol, grid, center)
+
+imagemaker = MolImageMaker(atom_getter, bond_getter, channel_type='features')
+wrapper = MolWrapper(imagemaker, voxelizer, visualizer)
+grid = wrapper.run(rdmol, center, radii=1.0)
+if pymol :
+    wrapper.visualize(f'{save_dir}/bond_features.pse', ligand_rdmol, grid, center)
+
+unknown_atom_getter = AtomTypeGetter(['C', 'N', 'O'], unknown=True)
+imagemaker = MolImageMaker(unknown_atom_getter, bond_getter, channel_type='types')
+wrapper = MolWrapper(imagemaker, voxelizer, visualizer)
+grid = wrapper.run(rdmol, center, radii=1.0)
+if pymol :
+    wrapper.visualize(f'{save_dir}/unknownS.pse', ligand_rdmol, grid, center)
+
+""" SYSTEM TEST """
+rdmol_list = [ligand_rdmol, protein_rdmol]
+center = ligand_center
+atom_getter = AtomTypeGetter(['C', 'N', 'O', 'S'])
+bond_getter = BondTypeGetter.default()
+
+imagemaker = MolSystemImageMaker([atom_getter, None], [atom_getter, bond_getter], channel_type='types')
+wrapper = MolSystemWrapper(imagemaker, voxelizer, ['Ligand', 'Protein'], visualizer)
+grid = wrapper.run(rdmol_list, center, radii=1.0)
+if pymol :
+    wrapper.visualize(f'{save_dir}/system.pse', [ligand_rdmol, protein_rdmol], grid, center)
 
 """ COMPLEX TEST """
-ligand_getter = RDMolChannelGetter(atom_getter, bond_getter, prefix='')
-pocket_getter = RDMolChannelGetter(atom_getter, bond_getter, prefix='')
-wrapper = RDMolWrapper([ligand_getter, pocket_getter])
-voxelizer.decorate(wrapper)
-
-grids, inputs = voxelizer.run([ligand_rdmol, pocket_rdmol], return_inputs=True)
-ligand_grid_dict, pocket_grid_dict = voxelizer.wrapper.split_channel(grids)
-
+imagemaker = MolSystemImageMaker([atom_getter, bond_getter], [atom_getter, None], channel_type='features')
+wrapper = ComplexWrapper(imagemaker, voxelizer, visualizer)
+grid = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.0)
 if pymol :
-    visualize_complex('result_rdkit/complex.pse', ligand_rdmol, pocket_rdmol, ligand_grid_dict, pocket_grid_dict, center, 0.5)
+    wrapper.visualize(f'{save_dir}/complex.pse', ligand_rdmol, protein_rdmol, grid, center)
+

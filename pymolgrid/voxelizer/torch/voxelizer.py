@@ -6,7 +6,7 @@ import itertools
 from torch import Tensor, FloatTensor, LongTensor, BoolTensor
 from typing import Tuple, Union, Optional, Dict, List, Callable
 
-from pymolgrid.base import BaseVoxelizer
+from pymolgrid.voxelizer.base import BaseVoxelizer
 from .transform import do_random_transform
 
 """
@@ -21,12 +21,12 @@ class Voxelizer(BaseVoxelizer) :
         resolution: float = 0.5,
         dimension: int = 64,
         atom_scale: float = 1.5,
+        radii_type: str = 'scalar',
         density: str = 'gaussian',
-        channel_wise_radii: bool = False,
         device: str = 'cpu',
         blockdim: Optional[int] = None
     ) :
-        super(Voxelizer, self).__init__(resolution, dimension, atom_scale, channel_wise_radii)
+        super(Voxelizer, self).__init__(resolution, dimension, atom_scale, radii_type)
         assert density in ['gaussian', 'binary']
         self._density = density.lower()
         self._gaussian = (self._density == 'gaussian')
@@ -113,16 +113,6 @@ class Voxelizer(BaseVoxelizer) :
         random_rotation: bool = False,
         out: Optional[FloatTensor] = None
     ) -> FloatTensor :
-        """
-        coords: (V, 3)
-        center: (3,)
-        channels: (V, C) or (V,)
-        radii: scalar or (V, ) of (C, )
-        random_translation: float (nonnegative)
-        random_rotation: bool
-
-        out: (C,D,H,W)
-        """
         if channels.dim() == 1 :
             types = channels
             return self.forward_types(coords, center, types, radii, random_translation, random_rotation, out)
@@ -167,8 +157,7 @@ class Voxelizer(BaseVoxelizer) :
             out = self.get_empty_grid(C)
 
         # Set Atom Radii
-        is_atom_wise_radii = (isinstance(radii, Tensor) and (not self.channel_wise_radii))
-        if self.channel_wise_radii :
+        if self._radii_type is self.CHANNEL_WISE :
             atom_size = radii.max().item() * self.atom_scale
         else :
             atom_size = radii * self.atom_scale
@@ -176,13 +165,13 @@ class Voxelizer(BaseVoxelizer) :
         # Clipping Overlapped Atoms
         box_overlap = self._get_overlap(coords, atom_size)
         coords, features = coords[box_overlap], features[box_overlap]
-        if is_atom_wise_radii:
+        if self._radii_type is self.ATOM_WISE:
             radii = radii[box_overlap]
 
         # Run
         if self.num_blocks > 1 :
             blockdim = self.blockdim
-            if is_atom_wise_radii:
+            if self._radii_type is self.ATOM_WISE :
                 atom_size = radii * self.atom_scale
             block_overlap_dict = self._get_overlap_blocks(coords, atom_size)
             
@@ -200,7 +189,7 @@ class Voxelizer(BaseVoxelizer) :
 
                 grid_block = self.grid_block_dict[(xidx, yidx, zidx)]
                 coords_block, features_block = coords[overlap], features[overlap]
-                radii_block = radii[overlap] if is_atom_wise_radii else radii
+                radii_block = radii[overlap] if self._radii_type is self.ATOM_WISE else radii
                 self._set_grid_features(coords_block, features_block, radii_block, grid_block, out_block)
         else :
             grid = self.grid
@@ -210,19 +199,21 @@ class Voxelizer(BaseVoxelizer) :
 
     def _check_args_features(self, coords: FloatTensor, features: FloatTensor, radii: Union[float,FloatTensor], 
                     out: Optional[FloatTensor] = None) :
-        V = coords.size(0)
-        C = features.size(1)
+        V = coords.shape[0]
+        C = features.shape[1]
         D = H = W = self.dimension
-        assert features.size(0) == V, f'atom features does not match number of atoms: {features.size(0)} vs {V}'
-        assert features.dim() == 2, f"atom features does not match dimension: {tuple(features.size())} vs {(V,'*')}"
-        if self.channel_wise_radii :
-            assert isinstance(radii, Tensor)
-            assert radii.size() == (C,), f'radii does not match dimension (number of channels,): {tuple(radii.size())} vs {(C,)}'
+        assert features.shape[0] == V, f'atom features does not match number of atoms: {features.shape[0]} vs {V}'
+        assert features.ndim == 2, f"atom features does not match dimension: {features.shape} vs {(V,'*')}"
+        if self._radii_type is self.SCALAR :
+            assert np.isscalar(radii), f'the radii type of voxelizer is `scalar`, radii should be scalar'
+        elif self._radii_type is self.CHANNEL_WISE :
+            assert not np.isscalar(radii), f'the radii type of voxelizer is `channel-wise`, radii should be Tensor[{C},]'
+            assert radii.shape == (C,), f'radii does not match dimension (number of channels,): {radii.shape} vs {(C,)}'
         else :
-            if isinstance(radii, Tensor) :
-                assert radii.size() == (V,), f'radii does not match dimension (number of atoms,): {tuple(radii.size())} vs {(V,)}'
+            assert not np.isscalar(radii), f'the radii type of voxelizer is `atom-wise`, radii should be Tensor[{V},]'
+            assert radii.shape == (V,), f'radii does not match dimension (number of atoms,): {radii.shape} vs {(V,)}'
         if out is not None :
-            assert out.size() == (C, D, H, W), f'Output grid dimension incorrect: {tuple(out.size())} vs {(C,D,H,W)}'
+            assert out.shape == (C, D, H, W), f'Output grid dimension incorrect: {out.shape} vs {(C,D,H,W)}'
 
     def _set_grid_features(
         self,
@@ -243,7 +234,7 @@ class Voxelizer(BaseVoxelizer) :
         features = features.T                                               # (V, C) -> (C, V)
         D, H, W, _ = grid.size()
         grid = grid.view(-1, 3)                                             # (DHW, 3)
-        if self.channel_wise_radii :
+        if self._radii_type is self.CHANNEL_WISE :
             if out.is_contiguous() :
                 _out = out.view(-1, D*H*W)
                 for type_idx in range(features.size(0)) :
@@ -295,7 +286,7 @@ class Voxelizer(BaseVoxelizer) :
 
         # Set Out
         if out is None :
-            if self.channel_wise_radii :
+            if self._radii_type is self.CHANNEL_WISE :
                 C = radii.size(0)
             else :
                 C = torch.max(types).item() + 1
@@ -304,7 +295,7 @@ class Voxelizer(BaseVoxelizer) :
             out.fill_(0.)
 
         # Set Atom Radii
-        if self.channel_wise_radii :
+        if self._radii_type is self.CHANNEL_WISE :
             assert isinstance(radii, Tensor), \
                     'Type-Radii requires type indexed radii (torch.FloatTensor(size=(C,)))' 
             radii = radii[types]            # (C, ) -> (V, )
@@ -347,18 +338,18 @@ class Voxelizer(BaseVoxelizer) :
         V = coords.size(0)
         C = torch.max(types).item() + 1
         D = H = W = self.dimension
-        assert isinstance(types, Tensor), f'types should be LongTensor, dtype: {types.dtype}'
-        assert types.dim() == 1, f"types does not match dimension: {tuple(types.size())} vs {(V,)}"
-        assert types.size(0) == V, f'types does not match number of atoms: {types.size(0)} vs {V}'
-        if isinstance(radii, Tensor) :
-            if self.channel_wise_radii :
-                assert radii.dim() == 1, f"radii does not match dimension: {tuple(radii.size())} vs {('Channel',)}"
-                assert radii.size() == (C,), f'radii does not match dimension (number of types,): {tuple(radii.size())} vs {(C,)}'
-            else :
-                assert radii.size() == (V,), f'radii does not match dimension (number of atoms,): {tuple(radii.size())} vs {(V,)}'
+        assert types.shape == (V,), f"types does not match dimension: {types.shape} vs {(V,)}"
+        if self._radii_type is self.SCALAR :
+            assert np.isscalar(radii), f'the radii type of voxelizer is `scalar`, radii should be scalar'
+        elif self._radii_type is self.CHANNEL_WISE :
+            assert not np.isscalar(radii), f'the radii type of voxelizer is `channel-wise`, radii should be Tensor[{C},]'
+            assert radii.shape == (C,), f'radii does not match dimension (number of channels,): {radii.shape} vs {(C,)}'
+        else :
+            assert not np.isscalar(radii), f'the radii type of voxelizer is `atom-wise`, radii should be Tensor[{V},]'
+            assert radii.shape == (V,), f'radii does not match dimension (number of atoms,): {radii.shape} vs {(V,)}'
         if out is not None :
-            assert out.size(0) >= C, f'Output channel is less than number of types: {out.size(0)} < {C}'
-            assert out.size()[1:] == (D, H, W), f'Output grid dimension incorrect: {tuple(out.size())} vs {("*",D,H,W)}'
+            assert out.shape[0] >= C, f'Output channel is less than number of types: {out.shape[0]} < {C}'
+            assert out.shape[1:] == (D, H, W), f'Output grid dimension incorrect: {out.shape} vs {("*",D,H,W)}'
 
     def _set_grid_types(
         self,
