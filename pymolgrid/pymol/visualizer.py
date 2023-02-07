@@ -37,7 +37,7 @@ class Visualizer() :
         new_coords: Optional[ArrayLike]
     ) :
         if new_coords is not None :
-            rdmol = self.__apply_coord(rdmol, new_coords)
+            rdmol = self.__apply_coords(rdmol, new_coords)
         self.__launch_pymol()
 
         temp_dir = tempfile.TemporaryDirectory()
@@ -212,7 +212,7 @@ class Visualizer() :
         cmd.feedback('disable', 'all', 'everything')
 
     @staticmethod
-    def __apply_coord(rdmol: Mol, coords: ArrayLike) -> Mol :
+    def __apply_coords(rdmol: Mol, coords: ArrayLike) -> Mol :
         rdmol = Chem.Mol(rdmol)
         conf = rdmol.GetConformer()
         for i in range(rdmol.GetNumAtoms()) :
