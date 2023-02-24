@@ -7,12 +7,12 @@ from rdkit.Chem import Mol
 from typing import Optional, Union, Dict, List, Any
 from numpy.typing import ArrayLike
 
-from pymolgrid.voxelizer import BaseVoxelizer
-from .imagemaker import MolImageMaker, MolSystemImageMaker
+from molvoxel.voxelizer import BaseVoxelizer
+from molvoxel.rdkit.pointcloud import MolPointCloudMaker, MolSystemPointCloudMaker
 
 class MolWrapper() :
-    def __init__(self, imagemaker: MolImageMaker, voxelizer: BaseVoxelizer, visualizer: Optional[Any] = None) :
-        self.maker = imagemaker
+    def __init__(self, pointcloudmaker: MolPointCloudMaker, voxelizer: BaseVoxelizer, visualizer: Optional[Any] = None) :
+        self.maker = pointcloudmaker
         self.voxelizer = voxelizer
         self.visualizer = visualizer
         self.num_channels = self.maker.num_channels
@@ -27,23 +27,21 @@ class MolWrapper() :
         radii: Union[float, ArrayLike] = 1.0,
         random_translation: float = 0.0,
         random_rotation: bool = False,
-        out: ArrayLike = None,
+        out_grid: Optional[ArrayLike] = None,
         **kwargs
-    ) -> Dict[str, ArrayLike]:
+    ) -> ArrayLike:
         maker, voxelizer = self.maker, self.voxelizer
         coords, channels = maker.run(rdmol, **kwargs)
 
-        if out is not None :
-            assert out.shape == self.grid_dimension
-        else :
-            out = self.get_empty_grid()
+        if out_grid is not None :
+            assert np.shape(out_grid) == self.grid_dimension
         
         coords = voxelizer.asarray(coords, 'coords')
         center = voxelizer.asarray(center, 'center') if center is not None else center
         channels = voxelizer.asarray(channels, self.channel_type)
         radii = radii if np.isscalar(radii) else voxelizer.asarray(radii, 'radii')
 
-        return voxelizer.forward(coords, center, channels, radii, random_translation, random_rotation, out=out)
+        return voxelizer.forward(coords, center, channels, radii, random_translation, random_rotation, out_grid=out_grid)
 
     def get_coords(self, rdmol) :
         coords = self.maker.get_coords(rdmol)
@@ -53,23 +51,30 @@ class MolWrapper() :
         channels = self.maker.get_channels(rdmol)
         return self.voxelizer.asarray(channels, self.channel_type)
 
-    def split_channel(self, grid: ArrayLike) -> Dict[str, ArrayLike]:
-        return self.maker.split_channel(grid)
+    def split_channel(self, image: ArrayLike) -> Dict[str, ArrayLike]:
+        return self.maker.split_channel(image)
 
     def get_empty_grid(self, batch_size: Optional[int] = None, init_zero: bool = False) -> ArrayLike :
         return self.voxelizer.get_empty_grid(self.num_channels, batch_size, init_zero)
     
-    def visualize(self, pse_path: str, rdmol: Mol, grid: ArrayLike, center: Optional[ArrayLike], new_coords: Optional[ArrayLike] = None) :
+    def visualize(self, pse_path: str, rdmol: Mol, image: ArrayLike, center: Optional[ArrayLike], new_coords: Optional[ArrayLike] = None) :
         assert self.visualizer is not None
-        grid_dict = self.split_channel(grid)
+        channel_dict = self.split_channel(image)
         if center is None :
             center = self.voxelizer.asarray([0,0,0], 'center')
-        self.visualizer.visualize_mol(pse_path, rdmol, grid_dict, center, self.resolution, new_coords)
+        self.visualizer.visualize_mol(pse_path, rdmol, channel_dict, center, self.resolution, new_coords)
 
 class MolSystemWrapper(MolWrapper) :
-    def __init__(self, imagemaker: MolSystemImageMaker, voxelizer: BaseVoxelizer, \
+    def __init__(self, pointcloudmaker: MolSystemPointCloudMaker, voxelizer: BaseVoxelizer, \
             name_list: Optional[List[str]] = None, visualizer: Optional[Any] = None) :
-        super(MolSystemWrapper, self).__init__(imagemaker, voxelizer, visualizer)
+        self.maker = pointcloudmaker
+        self.voxelizer = voxelizer
+        self.visualizer = visualizer
+        self.num_channels = self.maker.num_channels
+        self.channel_type = self.maker.channel_type
+        self.grid_dimension = self.voxelizer.grid_dimension(self.num_channels)
+        self.resolution = self.voxelizer.resolution
+
         self.name_list = name_list
 
     def run(
@@ -79,23 +84,21 @@ class MolSystemWrapper(MolWrapper) :
         radii: Union[float, List[float], List[ArrayLike]] = 1.0,
         random_translation: float = 0.0,
         random_rotation: bool = False,
-        out: ArrayLike = None,
+        out_grid: Optional[ArrayLike] = None,
         **kwargs,
-    ) -> Dict[str, ArrayLike]:
+    ) -> ArrayLike:
         maker, voxelizer = self.maker, self.voxelizer
         coords, channels = maker.run(rdmol_list, **kwargs)
 
-        if out is not None :
-            assert out.shape == self.grid_dimension
-        else :
-            out = self.get_empty_grid()
+        if out_grid is not None :
+            assert np.shape(out_grid) == self.grid_dimension
         
         if voxelizer.is_radii_type_scalar :
             pass
         elif voxelizer.is_radii_type_atom_wise :
             if isinstance(radii, list) :
                 assert len(radii) == len(rdmol_list)
-                radii_list = [[r] * c.shape[0] for r, c in zip(radii, coords_list)]
+                radii_list = [[r] * rdmol.GetNumAtoms() for r, rdmol in zip(radii, rdmol_list)]
                 radii = np.concatenate(radii_list, dtype=np.float32)
         else :
             if isinstance(radii, list) :
@@ -105,7 +108,7 @@ class MolSystemWrapper(MolWrapper) :
         center = voxelizer.asarray(center, 'center') if center is not None else center
         channels = voxelizer.asarray(channels, maker.channel_type)
         radii = radii if np.isscalar(radii) else voxelizer.asarray(radii, 'radii')
-        return voxelizer.forward(coords, center, channels, radii, random_translation, random_rotation, out=out)
+        return voxelizer.forward(coords, center, channels, radii, random_translation, random_rotation, out_grid=out_grid)
 
     def get_coords(self, rdmol_list) :
         coords = self.maker.get_coords(rdmol_list)
@@ -115,20 +118,20 @@ class MolSystemWrapper(MolWrapper) :
         channels= self.maker.get_channels(rdmol_list)
         return self.voxelizer.asarray(channels, self.channel_type)
 
-    def split_channel(self, grid: ArrayLike) -> List[Dict[str, ArrayLike]]:
-        return self.maker.split_channel(grid)
+    def split_channel(self, image: ArrayLike) -> List[Dict[str, ArrayLike]]:
+        return self.maker.split_channel(image)
 
     def visualize(
         self,
         pse_path: str,
         rdmol_list: List[Mol],
-        grid: ArrayLike,
+        image: ArrayLike,
         center: Optional[ArrayLike],
         new_coords: Optional[ArrayLike] = None,
     ) :
         assert self.visualizer is not None
         assert self.name_list is not None, 'name_list should be set'
-        grid_dict_list = self.split_channel(grid)
+        channel_dict_list = self.split_channel(image)
         if center is None :
             center = self.voxelizer.asarray([0,0,0], 'center')
         if new_coords is not None :
@@ -140,11 +143,11 @@ class MolSystemWrapper(MolWrapper) :
                 offset += num_atoms
         else :
             new_coords_list = None
-        self.visualizer.visualize_system(pse_path, rdmol_list, self.name_list, grid_dict_list, center, self.resolution, new_coords_list)
+        self.visualizer.visualize_system(pse_path, rdmol_list, self.name_list, channel_dict_list, center, self.resolution, new_coords_list)
 
 class ComplexWrapper(MolSystemWrapper) :
-    def __init__(self, imagemaker: MolSystemImageMaker, voxelizer: BaseVoxelizer, visualizer: Optional[Any] = None) :
-        super(ComplexWrapper, self).__init__(imagemaker, voxelizer, ['Ligand', 'Protein'], visualizer)
+    def __init__(self, pointcloudmaker: MolSystemPointCloudMaker, voxelizer: BaseVoxelizer, visualizer: Optional[Any] = None) :
+        super(ComplexWrapper, self).__init__(pointcloudmaker, voxelizer, ['Ligand', 'Protein'], visualizer)
 
     def run(
         self,
@@ -154,10 +157,10 @@ class ComplexWrapper(MolSystemWrapper) :
         radii: Union[float, List[float], List[ArrayLike]] = 1.0,
         random_translation: float = 0.0,
         random_rotation: bool = False,
-        out: ArrayLike = None,
+        out_grid: Optional[ArrayLike] = None,
         **kwargs,
-    ) -> Dict[str, ArrayLike]:
-        return super().run([ligand_rdmol, protein_rdmol], center, radii, random_translation, random_rotation, out, **kwargs)
+    ) -> ArrayLike:
+        return super().run([ligand_rdmol, protein_rdmol], center, radii, random_translation, random_rotation, out_grid, **kwargs)
 
     def get_coords(self, ligand_rdmol, protein_rdmol) :
         return super().get_coords([ligand_rdmol, protein_rdmol])
@@ -170,12 +173,12 @@ class ComplexWrapper(MolSystemWrapper) :
         pse_path: str,
         ligand_rdmol: Mol,
         protein_rdmol: Mol,
-        grid: ArrayLike,
+        image: ArrayLike,
         center: Optional[ArrayLike],
         new_coords: Optional[ArrayLike] = None,
     ) :
         assert self.visualizer is not None
-        ligand_grid_dict, protein_grid_dict = self.split_channel(grid)
+        ligand_channel_dict, protein_channel_dict = self.split_channel(image)
         if center is None :
             center = self.voxelizer.asarray([0,0,0], 'center')
         if new_coords is not None :
@@ -185,5 +188,5 @@ class ComplexWrapper(MolSystemWrapper) :
         else :
             ligand_new_coords = None
             protein_new_coords = None
-        self.visualizer.visualize_complex(pse_path, ligand_rdmol, protein_rdmol, ligand_grid_dict, protein_grid_dict,
+        self.visualizer.visualize_complex(pse_path, ligand_rdmol, protein_rdmol, ligand_channel_dict, protein_channel_dict,
                           center, self.resolution, ligand_new_coords, protein_new_coords)

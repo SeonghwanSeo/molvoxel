@@ -5,15 +5,23 @@ from rdkit.Chem import Atom, Bond, Mol
 from typing import Any, Dict, Tuple, List
 from numpy.typing import ArrayLike, NDArray
 
-from .base import ImageMaker
 from .getter import *
 
 NDArrayInt = NDArray[np.int16]
 NDArrayFloat32 = NDArray[np.float32]
 NDArrayFloat64 = NDArray[np.float64]
 
+class PointCloudMaker() :
+    def __init__(self, channels: List[str]) :
+        self.channels = channels
+        self.num_channels = len(channels)
+
+    def split_channel(self, image: ArrayLike) -> Dict[str, ArrayLike] :
+        assert np.shape(image)[0] == self.num_channels
+        return {channel_name: channel for channel_name, channel in zip(self.channels, image)}
+
 """ MOLECULE"""
-class MolImageMaker(ImageMaker) :
+class MolPointCloudMaker(PointCloudMaker) :
     def __init__(self,
             atom_getter: AtomChannelGetter,
             bond_getter: Optional[BondChannelGetter] = None,
@@ -42,7 +50,7 @@ class MolImageMaker(ImageMaker) :
             self.use_bond = False
             self.num_atom_channels = atom_getter.num_channels
             channels = atom_getter.channels
-        super(MolImageMaker, self).__init__(channels)
+        super(MolPointCloudMaker, self).__init__(channels)
 
         if use_features :
             self.setup_features()
@@ -81,18 +89,12 @@ class MolImageMaker(ImageMaker) :
             self.bond_st = self.atom_end
             self.bond_end = self.bond_st + self.num_bond_channels
 
-    def get_features(self, rdmol: Mol, out: Optional[NDArrayFloat32], **kwargs) -> NDArrayFloat32:
-        if out is None :
-            if self.use_bond :
-                num_atoms = rdmol.GetNumAtoms()
-                num_bonds = rdmol.GetNumBonds()
-                size = (num_atoms + num_bonds, self.num_channels)
-            else :
-                num_atoms = rdmol.GetNumAtoms()
-                size = (num_atoms, self.num_channels)
-            out = np.zeros(size, dtype=np.float32)
+    def get_features(self, rdmol: Mol, **kwargs) -> NDArrayFloat32:
+        if self.use_bond :
+            size = (rdmol.GetNumAtoms() + rdmol.GetNumBonds(), self.num_channels)
         else :
-            out.fill(0)
+            size = (rdmol.GetNumAtoms(), self.num_channels)
+        out = np.zeros(size, dtype=np.float32)
         return self._get_features(rdmol, out, **kwargs)
 
     def _get_features(self, rdmol: Mol, out: NDArrayFloat32, **kwargs) -> NDArrayFloat32:
@@ -113,6 +115,7 @@ class MolImageMaker(ImageMaker) :
     def __get_atom_feature(self, atom: Atom, **kwargs) -> ArrayLike:
         return self.atom_getter.get_feature(atom, **kwargs)
     def __get_bond_feature(self, bond: Bond, **kwargs) -> ArrayLike:
+        assert self.bond_getter is not None
         return self.bond_getter.get_feature(bond, **kwargs)
 
     """ TYPES """
@@ -121,17 +124,13 @@ class MolImageMaker(ImageMaker) :
         if self.use_bond :
             self.bond_start_index = self.atom_start_index + self.num_atom_channels
 
-    def get_types(self, rdmol: Mol, out: Optional[NDArrayInt], **kwargs) -> NDArrayInt:
+    def get_types(self, rdmol: Mol, **kwargs) -> NDArrayInt:
         assert self.use_features is False
-        if out is None :
-            if self.use_bond :
-                num_atoms = rdmol.GetNumAtoms()
-                num_bonds = rdmol.GetNumBonds()
-                size = (num_atoms + num_bonds, )
-            else :
-                num_atoms = rdmol.GetNumAtoms()
-                size = (num_atoms, )
-            out = np.empty(size, dtype=np.int16)
+        if self.use_bond :
+            size = (rdmol.GetNumAtoms() + rdmol.GetNumBonds(),)
+        else :
+            size = (rdmol.GetNumAtoms(),)
+        out = np.empty(size, dtype=np.int16)
         return self._get_types(rdmol, out, **kwargs)
 
     def _get_types(self, rdmol: Mol, out: NDArrayInt, **kwargs) -> NDArrayInt :
@@ -147,12 +146,13 @@ class MolImageMaker(ImageMaker) :
     def __get_atom_type(self, atom: Atom, **kwargs) -> int:
         return self.atom_getter.get_type(atom, **kwargs) + self.atom_start_index
     def __get_bond_type(self, bond: Bond, **kwargs) -> int:
+        assert self.bond_getter is not None
         return self.bond_getter.get_type(bond, **kwargs) + self.bond_start_index
 
-class _MolElementImageMaker(MolImageMaker) :
+class _MolElementPointCloudMaker(MolPointCloudMaker) :
     def __init__(self, atom_getter, bond_getter, channel_type, start_index) :
         self.start_index = start_index
-        super(_MolElementImageMaker, self).__init__(atom_getter, bond_getter, channel_type)
+        super(_MolElementPointCloudMaker, self).__init__(atom_getter, bond_getter, channel_type)
 
     """ FEATURES """
     def setup_features(self) :
@@ -168,9 +168,9 @@ class _MolElementImageMaker(MolImageMaker) :
         if self.use_bond :
             self.bond_start_index = self.atom_start_index + self.num_atom_channels
 
-class MolSystemImageMaker(ImageMaker) :
+class MolSystemPointCloudMaker(PointCloudMaker) :
     def __init__(self, *args, channel_type: str = 'features') :
-        # type: self, *args: Tuple[AtomChannelGetter, Optional[BondChannelGetter]], mode: str
+        ## type: self, *args: Tuple[AtomChannelGetter, Optional[BondChannelGetter]], mode: str
         assert channel_type in ['features', 'types'], f"channel_type(input: {channel_type}) should be 'features' or 'types'"
         self.channel_type = channel_type
         self.use_features = use_features = (channel_type == 'features')
@@ -179,11 +179,11 @@ class MolSystemImageMaker(ImageMaker) :
         channel_offset = 0
         channels = []
         for atom_getter, bond_getter in args :
-            maker = _MolElementImageMaker(atom_getter, bond_getter, channel_type, channel_offset)
+            maker = _MolElementPointCloudMaker(atom_getter, bond_getter, channel_type, channel_offset)
             self.maker_list.append(maker)
             channel_offset += maker.num_channels
             channels += maker.channels
-        super(MolSystemImageMaker, self).__init__(channels)
+        super(MolSystemPointCloudMaker, self).__init__(channels)
     
     def run(self, rdmol_list: List[Mol], **kwargs) -> Tuple[NDArrayFloat64, NDArray]:
         coords = kwargs.get('kwargs', self.get_coords(rdmol_list))
@@ -211,12 +211,12 @@ class MolSystemImageMaker(ImageMaker) :
         else :
             return self.get_types(rdmol_list, out, **kwargs)
 
-    def split_channel(self, grids) -> List[Dict[str, ArrayLike]]:
+    def split_channel(self, image) -> List[Dict[str, ArrayLike]]:
         channel_offset = 0
         grid_dist_list = []
         for maker in self.maker_list :
-            mol_grids = grids[channel_offset: channel_offset + maker.num_channels]
-            grid_dist_list.append(maker.split_channel(mol_grids))
+            mol_image = image[channel_offset: channel_offset + maker.num_channels]
+            grid_dist_list.append(maker.split_channel(mol_image))
             channel_offset += maker.num_channels
         return grid_dist_list
 
@@ -228,7 +228,7 @@ class MolSystemImageMaker(ImageMaker) :
                     num_objects += rdmol.GetNumAtoms() + rdmol.GetNumBonds()
                 else :
                     num_objects += rdmol.GetNumAtoms()
-                size = (num_objects, self.num_channels)
+            size = (num_objects, self.num_channels)
             out = np.zeros(size, dtype=np.float32)
         else :
             out.fill(0)
@@ -254,7 +254,7 @@ class MolSystemImageMaker(ImageMaker) :
                     num_objects+= rdmol.GetNumAtoms() + rdmol.GetNumBonds()
                 else :
                     num_objects += rdmol.GetNumAtoms()
-                size = (num_objects,)
+            size = (num_objects,)
             out = np.empty(size, dtype=np.int16)
         return self._get_types(rdmol_list, out, **kwargs)
     

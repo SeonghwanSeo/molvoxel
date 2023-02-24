@@ -1,8 +1,8 @@
 import sys
 import os
-from pymolgrid.rdkit.wrapper import ComplexWrapper
-from pymolgrid.rdkit.imagemaker import MolSystemImageMaker
-from pymolgrid.rdkit.getter import AtomTypeGetter, BondTypeGetter, AtomFeatureGetter
+from molvoxel.rdkit.wrapper import ComplexWrapper
+from molvoxel.rdkit.pointcloud import MolSystemPointCloudMaker
+from molvoxel.rdkit.getter import AtomTypeGetter, BondTypeGetter, AtomFeatureGetter
 import numpy as np
 from rdkit import Chem
 
@@ -12,10 +12,10 @@ def main(Voxelizer, RandomTransform, pymol, device) :
     import torch
 
     if pymol :
-        from pymolgrid.pymol import Visualizer
+        from molvoxel.pymol import Visualizer
 
     """ SET FUNCTION """
-    def test(imagemaker, ligand_rdmol, protein_rdmol, channel_radii, atom_radii, save_dir) :
+    def test(pointcloudmaker, ligand_rdmol, protein_rdmol, channel_radii, atom_radii, save_dir) :
         if pymol :
             os.system(f'mkdir -p {save_dir}')
             visualizer = Visualizer()
@@ -32,54 +32,54 @@ def main(Voxelizer, RandomTransform, pymol, device) :
 
         transform = RandomTransform(random_translation=0.5, random_rotation=True)
 
-        wrapper = ComplexWrapper(imagemaker, voxelizer, visualizer)
-        wrapper_small = ComplexWrapper(imagemaker, voxelizer_small, visualizer)
-        wrapper_hr = ComplexWrapper(imagemaker, voxelizer_hr, visualizer)
+        wrapper = ComplexWrapper(pointcloudmaker, voxelizer, visualizer)
+        wrapper_small = ComplexWrapper(pointcloudmaker, voxelizer_small, visualizer)
+        wrapper_hr = ComplexWrapper(pointcloudmaker, voxelizer_hr, visualizer)
 
         grid = wrapper.get_empty_grid()
 
         print('Test 1: Binary: False, Channel-Wise Radii: False, Density: Gaussian (Default)')
         test_name = 'ref'
-        ref_grid = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.0)
-        out_grid = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.0, out=grid)
-        assert grid is out_grid, 'INPLACE FAILE'
-        assert np.less(np.abs(np.subtract(grid.tolist(), ref_grid.tolist())), 1e-5).all(), 'REPRODUCTION FAIL'
+        ref_image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.0)
+        image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.0, out_grid=grid)
+        assert image is grid, 'INPLACE FAILE'
+        assert np.less(np.abs(np.subtract(image.tolist(), ref_image.tolist())), 1e-5).all(), 'REPRODUCTION FAIL'
         if pymol :
             wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, grid, center)
 
         print('Test 2: Small (One Block)')
         test_name = 'small'
-        out_grid = wrapper_small.run(ligand_rdmol, protein_rdmol, center, radii=1.0)
+        image = wrapper_small.run(ligand_rdmol, protein_rdmol, center, radii=1.0)
         if pymol :
-            wrapper_small.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, out_grid, center)
+            wrapper_small.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
         print('Test 3: High Resolution')
         test_name = 'hr'
-        out_grid = wrapper_hr.run(ligand_rdmol, protein_rdmol, center, radii=1.0)
+        image = wrapper_hr.run(ligand_rdmol, protein_rdmol, center, radii=1.0)
         if pymol :
-            wrapper_hr.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, out_grid, center)
+            wrapper_hr.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
         print('Test 4: Channel-Wise Radii: True')
         test_name = 'channel-wise'
         voxelizer.radii_type = 'channel-wise'
-        wrapper.run(ligand_rdmol, protein_rdmol, center, channel_radii, out = grid)
+        image = wrapper.run(ligand_rdmol, protein_rdmol, center, channel_radii, out_grid = grid)
         if pymol :
-            wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, grid, center)
+            wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
         print('Test 5: Atom-wise Radii: True')
         test_name = 'atom-wise'
         voxelizer.radii_type = 'atom-wise'
-        wrapper.run(ligand_rdmol, protein_rdmol, center, atom_radii, out = grid)
+        image = wrapper.run(ligand_rdmol, protein_rdmol, center, atom_radii, out_grid = grid)
         if pymol :
-            wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, grid, center)
+            wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
         print('Test 6: Density: Binary')
         test_name = 'binary'
         voxelizer.density = 'binary'
         voxelizer.radii_type = 'scalar'
-        wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.0, out = grid)
+        image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.0, out_grid = grid)
         if pymol :
-            wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, grid, center)
+            wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
         print('Test 7: Random Transform')
         test_name = 'transform'
@@ -89,9 +89,9 @@ def main(Voxelizer, RandomTransform, pymol, device) :
         T = transform.get_transform()
         new_ligand_coords, new_protein_coords = T(ligand_coords, center), T(protein_coords, center)
         ligand_rdmol, protein_rdmol = apply_coord(ligand_rdmol, new_ligand_coords), apply_coord(protein_rdmol, new_protein_coords)
-        wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.0, out = grid)
+        image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.0, out_grid = grid)
         if pymol :
-            wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, grid, center)
+            wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
     """ LOAD DATA """
     ligand_path = './10gs/10gs_ligand.sdf'
@@ -106,16 +106,16 @@ def main(Voxelizer, RandomTransform, pymol, device) :
 
     atom_getter = AtomTypeGetter(['C', 'N', 'O', 'S'])
     bond_getter = BondTypeGetter([Chem.BondType.SINGLE, Chem.BondType.DOUBLE, Chem.BondType.AROMATIC])
-    imagemaker = MolSystemImageMaker([atom_getter, bond_getter], [atom_getter, bond_getter], channel_type='types')
+    pointcloudmaker = MolSystemPointCloudMaker([atom_getter, bond_getter], [atom_getter, bond_getter], channel_type='types')
 
-    channel_radii = np.ones((imagemaker.num_channels,))
+    channel_radii = np.ones((pointcloudmaker.num_channels,))
     channel_radii[:4] = 2.0
 
     num_atoms = ligand_rdmol.GetNumAtoms() + ligand_rdmol.GetNumBonds() + protein_rdmol.GetNumAtoms() + protein_rdmol.GetNumBonds()
     atom_radii = np.ones((num_atoms,))
     atom_radii[:ligand_rdmol.GetNumAtoms()] = 2.0
 
-    test(imagemaker, ligand_rdmol, protein_rdmol, channel_radii, atom_radii, save_dir)
+    test(pointcloudmaker, ligand_rdmol, protein_rdmol, channel_radii, atom_radii, save_dir)
 
     """ Vector """
     print('# Test Atom Feature #')
@@ -131,16 +131,16 @@ def main(Voxelizer, RandomTransform, pymol, device) :
 
     atom_getter = AtomFeatureGetter(get_features, channels)
     bond_getter = BondTypeGetter.default()
-    imagemaker = MolSystemImageMaker([atom_getter, None], [atom_getter, bond_getter], channel_type='features')
+    pointcloudmaker = MolSystemPointCloudMaker([atom_getter, None], [atom_getter, bond_getter], channel_type='features')
 
-    channel_radii = np.ones((imagemaker.num_channels,))
+    channel_radii = np.ones((pointcloudmaker.num_channels,))
     channel_radii[[4, 9]] = 2.0
 
     num_atoms = ligand_rdmol.GetNumAtoms() + protein_rdmol.GetNumAtoms() + protein_rdmol.GetNumBonds()
     atom_radii = np.ones((num_atoms,))
     atom_radii[ -protein_rdmol.GetNumBonds() : ] = 2.0
 
-    test(imagemaker, ligand_rdmol, protein_rdmol, channel_radii, atom_radii, save_dir)
+    test(pointcloudmaker, ligand_rdmol, protein_rdmol, channel_radii, atom_radii, save_dir)
 
 if __name__ == '__main__' :
     if '-y' in sys.argv :
@@ -148,9 +148,10 @@ if __name__ == '__main__' :
     else :
         pymol = False
 
-    device = 'cpu'
     if '-g' in sys.argv :
         device = 'cuda'
+    else :
+        device = 'cpu'
 
-    from pymolgrid.voxelizer.torch import Voxelizer, RandomTransform
+    from molvoxel.voxelizer.torch import Voxelizer, RandomTransform
     main(Voxelizer, RandomTransform, pymol, device)

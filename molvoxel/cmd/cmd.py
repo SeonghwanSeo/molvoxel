@@ -2,7 +2,7 @@ import argparse
 import os
 import logging
 
-from pymolgrid import config
+from molvoxel import config
 
 """
 description = f"The Protein-Ligand Interaction Profiler (PLIP) Version {config.__version__} " \

@@ -1,2 +1,2 @@
 from .base import BaseVoxelizer
-from .numpy import *
+#from .numpy import *

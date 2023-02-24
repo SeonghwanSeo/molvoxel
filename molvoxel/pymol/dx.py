@@ -25,7 +25,6 @@ def write_grid_to_dx_file(dx_path, values, center, resolution):
         'object 3 class array type double rank 0 items ' \
             + '[ {:d} ] data follows\n'.format(size**3),
     ]
-    n_points = 0
     line = ''
     values = values.reshape(-1).tolist()
     for i, value in enumerate(values) :

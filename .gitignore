@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 .DS_store
 test/result*
-pymolgrid/voxelizer/jax/
+molvoxel/voxelizer/jax/
 
 # C extensions
 *.so

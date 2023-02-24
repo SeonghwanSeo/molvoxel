@@ -3,15 +3,6 @@ import numpy as np
 from typing import Any, List, Dict, Callable
 from numpy.typing import ArrayLike
 
-class ImageMaker() :
-    def __init__(self, channels: List[str]) :
-        self.channels = channels
-        self.num_channels = len(channels)
-
-    def split_channel(self, grids: ArrayLike) -> Dict[str, ArrayLike] :
-        assert np.shape(grids)[0] == self.num_channels
-        return {channel: grid for channel, grid in zip(self.channels, grids)}
-
 class ChannelGetter() :
     def __init__(self, channels: List[str]) :
         self.channels = channels

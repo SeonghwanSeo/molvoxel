@@ -1,14 +1,14 @@
 import numpy as np
 from rdkit import Chem
-from pymolgrid.rdkit.wrapper import ComplexWrapper
-from pymolgrid.rdkit.imagemaker import MolSystemImageMaker
-from pymolgrid.rdkit.getter import AtomTypeGetter, BondTypeGetter, AtomFeatureGetter
+from molvoxel.rdkit.wrapper import ComplexWrapper
+from molvoxel.rdkit.pointcloud import MolSystemPointCloudMaker
+from molvoxel.rdkit.getter import AtomTypeGetter, BondTypeGetter, AtomFeatureGetter
 import time
 
 def run_test(voxelizer, grid, coords, center, channels, radii, random_translation = 0.5, random_rotation = True) :
     batch_size = grid.shape[0]
     for i in range(batch_size) :
-        voxelizer.forward(coords, center, channels, radii, random_translation, random_rotation, out=grid[i])
+        voxelizer.forward(coords, center, channels, radii, random_translation, random_rotation, out_grid=grid[i])
     return grid
 
 def main(voxelizer) :
@@ -25,10 +25,10 @@ def main(voxelizer) :
 
     atom_getter = AtomTypeGetter(['C', 'N', 'O', 'S'])
     bond_getter = BondTypeGetter.default()
-    imagemaker_types = MolSystemImageMaker([atom_getter, bond_getter], [atom_getter, bond_getter], channel_type='types')
-    imagemaker_features = MolSystemImageMaker([atom_getter, bond_getter], [atom_getter, bond_getter], channel_type='features')
-    wrapper_types = ComplexWrapper(imagemaker_types, voxelizer)
-    wrapper_features = ComplexWrapper(imagemaker_types, voxelizer)
+    pointcloudmaker_types = MolSystemPointCloudMaker([atom_getter, bond_getter], [atom_getter, bond_getter], channel_type='types')
+    pointcloudmaker_features = MolSystemPointCloudMaker([atom_getter, bond_getter], [atom_getter, bond_getter], channel_type='features')
+    wrapper_types = ComplexWrapper(pointcloudmaker_types, voxelizer)
+    wrapper_features = ComplexWrapper(pointcloudmaker_features, voxelizer)
 
     ligand_coords = ligand_rdmol.GetConformer().GetPositions()
     ligand_center = ligand_coords.mean(0)
@@ -83,7 +83,7 @@ def main(voxelizer) :
     print(f'times per run {(end_tot-st_tot) / batch_size / num_iteration / num_trial}')
 
 if __name__ == '__main__' :
-    from pymolgrid.voxelizer import Voxelizer
+    from molvoxel.voxelizer.numpy import Voxelizer
     resolution = 0.5
     dimension = 48
     voxelizer = Voxelizer(resolution, dimension)

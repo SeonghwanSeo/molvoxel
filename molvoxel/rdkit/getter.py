@@ -7,8 +7,7 @@ from rdkit.Chem import Atom, Bond
 from .base import ChannelGetter, TypeGetter, FeatureGetter
 
 """ ATOM """
-class AtomChannelGetter(ChannelGetter) :
-    pass
+AtomChannelGetter = ChannelGetter
 class AtomFeatureGetter(FeatureGetter) :
     pass
 class AtomTypeGetter(TypeGetter) :
@@ -21,8 +20,7 @@ class AtomTypeGetter(TypeGetter) :
         return super().get_type(atom.GetSymbol())
 
 """ BOND """
-class BondChannelGetter(ChannelGetter) :
-    pass
+BondChannelGetter = ChannelGetter
 class BondFeatureGetter(FeatureGetter) :
     pass
 class BondTypeGetter(TypeGetter) :

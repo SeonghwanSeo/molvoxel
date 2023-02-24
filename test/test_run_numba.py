@@ -7,5 +7,5 @@ if __name__ == '__main__' :
     else :
         pymol = False
 
-    from pymolgrid.voxelizer.numba import Voxelizer, RandomTransform
+    from molvoxel.voxelizer.numba import Voxelizer, RandomTransform
     main(Voxelizer, RandomTransform, pymol)

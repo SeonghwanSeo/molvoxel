@@ -1,6 +1,4 @@
-import math
-import types
-import functools
+import numpy as np
 
 from typing import Tuple, Optional, Union
 from numpy.typing import ArrayLike
@@ -15,7 +13,6 @@ class BaseVoxelizer() :
         dimension: int = 48,
         atom_scale: float = 1.5,
         radii_type: str = 'scalar',
-        channel_wise_radii: bool = False,
     ) :
         self._resolution = resolution
         self._dimension = dimension
@@ -82,12 +79,12 @@ class BaseVoxelizer() :
     def forward(
         self,
         coords: ArrayLike,
-        center: ArrayLike,
+        center: Optional[ArrayLike],
         channels: ArrayLike,
         radii: Union[float, ArrayLike],
         random_translation: float = 0.0,
         random_rotation: bool = False,
-        out: Optional[ArrayLike] = None
+        out_grid: Optional[ArrayLike] = None
     ) -> ArrayLike :
         """
         coords: (V, 3)
@@ -97,19 +94,44 @@ class BaseVoxelizer() :
         random_translation: float (nonnegative)
         random_rotation: bool
 
-        out: (C,D,H,W)
+        out_grid: (C,D,H,W)
         """
-        if channels.ndim == 1 :
+        if np.ndim(channels) == 1 :
             types = channels
-            return self.forward_types(coords, center, types, radii, random_translation, random_rotation, out)
+            return self.forward_types(coords, center, types, radii, random_translation, random_rotation, out_grid)
         else :
             features = channels
-            return self.forward_features(coords, center, features, radii, random_translation, random_rotation, out)
+            return self.forward_features(coords, center, features, radii, random_translation, random_rotation, out_grid)
+
     __call__ = forward
 
-    def get_empty_grid(self, num_channels: int, batch_size: Optional[int] = None, init_zero: bool = False) -> ArrayLike:
-        raise NotImplemented
+    def forward_types(
+        self,
+        coords: ArrayLike,
+        center: Optional[ArrayLike],
+        types: ArrayLike,
+        radii: Union[float, ArrayLike],
+        random_translation: float = 0.0,
+        random_rotation: bool = False,
+        out_grid: Optional[ArrayLike] = None
+    ) -> ArrayLike :
+        raise NotImplementedError
 
-    def asarray(self, array: ArrayLike, obj: str) :
-        raise NotImplemented
+    def forward_features(
+        self,
+        coords: ArrayLike,
+        center: Optional[ArrayLike],
+        features: ArrayLike,
+        radii: Union[float, ArrayLike],
+        random_translation: float = 0.0,
+        random_rotation: bool = False,
+        out_grid: Optional[ArrayLike] = None
+    ) -> ArrayLike :
+        raise NotImplementedError
+
+    def get_empty_grid(self, num_channels: int, batch_size: Optional[int] = None, init_zero: bool = False) -> ArrayLike:
+        raise NotImplementedError
+
+    def asarray(self, array: ArrayLike, obj: str) -> ArrayLike:
+        raise NotImplementedError
 
