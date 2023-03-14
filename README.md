@@ -24,8 +24,8 @@ from rdkit import Chem  # rdkit is not required packages
 import numpy as np
 
 def get_atom_features(atom) :
-  symbol, arom = atom.GetSymbol(), atom.GetIsAromatic()
-  return [symbol == 'C', symbol == 'N', symbol == 'O', symbol == 'S', arom]
+  symbol, aromatic = atom.GetSymbol(), atom.GetIsAromatic()
+  return [symbol == 'C', symbol == 'N', symbol == 'O', symbol == 'S', aromatic]
 
 mol = Chem.SDMolSupplier('test/10gs/ligand.sdf')[0]
 channels = {'C': 0, 'N': 1, 'O': 2, 'S': 3}
@@ -73,11 +73,12 @@ image = voxelizer(coords, center, atom_features, radii)       # (5, 32, 32, 32)
 
 ### RDKit Wrapper
 ``` python
+# RDKit is required
 from molvoxel.rdkit import AtomTypeGetter, BondTypeGetter, MolPointCloudMaker, MolWrapper
 atom_getter = AtomTypeGetter(['C', 'N', 'O', 'S'])
-bond_getter = BondTypeGetter.default()
+bond_getter = BondTypeGetter.default()		# (SINGLE, DOUBLE, TRIPLE, AROMATIC)
 
-pointcloudmaker = MolPointCloudMaker(atom_getter, None, channel_type='types')
+pointcloudmaker = MolPointCloudMaker(atom_getter, bond_getter, channel_type='types')
 wrapper = MolWrapper(pointcloudmaker, voxelizer, visualizer)
 image = wrapper.run(rdmol, center, radii=1.0)
 ```

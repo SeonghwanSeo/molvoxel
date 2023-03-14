@@ -1,8 +1,8 @@
 import sys
 import os
-from molvoxel.rdkit.wrapper import ComplexWrapper
-from molvoxel.rdkit.pointcloud import MolSystemPointCloudMaker
-from molvoxel.rdkit.getter import AtomTypeGetter, BondTypeGetter, AtomFeatureGetter
+from molvoxel.etc.rdkit.wrapper import ComplexWrapper
+from molvoxel.etc.rdkit.pointcloud import MolSystemPointCloudMaker
+from molvoxel.etc.rdkit.getter import AtomTypeGetter, BondTypeGetter, AtomFeatureGetter
 import numpy as np
 from rdkit import Chem
 
@@ -12,7 +12,7 @@ def main(Voxelizer, RandomTransform, pymol, device) :
     import torch
 
     if pymol :
-        from molvoxel.pymol import Visualizer
+        from molvoxel.etc.pymol import Visualizer
 
     """ SET FUNCTION """
     def test(pointcloudmaker, ligand_rdmol, protein_rdmol, channel_radii, atom_radii, save_dir) :

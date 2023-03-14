@@ -20,6 +20,12 @@ class PointCloudMaker() :
         assert np.shape(image)[0] == self.num_channels
         return {channel_name: channel for channel_name, channel in zip(self.channels, image)}
 
+    def run(self, *args, **kwargs) :
+        raise NotImplemented
+
+    def __call__(self, *args, **kwargs) :
+        return self.run(*args, **kwargs)
+
 """ MOLECULE"""
 class MolPointCloudMaker(PointCloudMaker) :
     def __init__(self,
@@ -61,7 +67,9 @@ class MolPointCloudMaker(PointCloudMaker) :
         coords = kwargs.get('kwargs', self.get_coords(rdmol))
         channels = kwargs.get('channels', self.get_channels(rdmol, **kwargs))
         return coords, channels
-    __call__ = run
+
+    def __call__(self, *args, **kwargs) :
+        return self.run(*args, **kwargs)
 
     def get_coords(self, rdmol: Mol) -> NDArrayFloat64:
         conf = rdmol.GetConformer()
@@ -89,27 +97,35 @@ class MolPointCloudMaker(PointCloudMaker) :
             self.bond_st = self.atom_end
             self.bond_end = self.bond_st + self.num_bond_channels
 
-    def get_features(self, rdmol: Mol, **kwargs) -> NDArrayFloat32:
-        if self.use_bond :
-            size = (rdmol.GetNumAtoms() + rdmol.GetNumBonds(), self.num_channels)
+    def get_features(self, rdmol: Mol, out: Optional[NDArrayFloat32] = None, **kwargs) -> NDArrayFloat32:
+        if out is None :
+            if self.use_bond :
+                size = (rdmol.GetNumAtoms() + rdmol.GetNumBonds(), self.num_channels)
+            else :
+                size = (rdmol.GetNumAtoms(), self.num_channels)
+            out = np.zeros(size, dtype=np.float32)
         else :
-            size = (rdmol.GetNumAtoms(), self.num_channels)
-        out = np.zeros(size, dtype=np.float32)
+            out.fill(0)
         return self._get_features(rdmol, out, **kwargs)
 
     def _get_features(self, rdmol: Mol, out: NDArrayFloat32, **kwargs) -> NDArrayFloat32:
         if self.use_bond :
             num_atoms = rdmol.GetNumAtoms()
+            num_bonds = rdmol.GetNumBonds()
             atom_st, atom_end = self.atom_st, self.atom_end
             bond_st, bond_end = self.bond_st, self.bond_end
             atom_features = [self.__get_atom_feature(atom, **kwargs) for atom in rdmol.GetAtoms()]
             bond_features = [self.__get_bond_feature(bond, **kwargs) for bond in rdmol.GetBonds()]
-            out[:num_atoms, atom_st:atom_end] = atom_features
-            out[num_atoms:, bond_st:bond_end] = bond_features
+            if num_atoms > 0 :
+                out[:num_atoms, atom_st:atom_end] = atom_features
+            if num_bonds > 0 :
+                out[num_atoms:, bond_st:bond_end] = bond_features
         else :
+            num_atoms = rdmol.GetNumAtoms()
             atom_st, atom_end = self.atom_st, self.atom_end
             atom_features = [self.__get_atom_feature(atom, **kwargs) for atom in rdmol.GetAtoms()]
-            out[:, atom_st:atom_end] = atom_features
+            if num_atoms > 0 :
+                out[:, atom_st:atom_end] = atom_features
         return out
 
     def __get_atom_feature(self, atom: Atom, **kwargs) -> ArrayLike:
@@ -124,22 +140,28 @@ class MolPointCloudMaker(PointCloudMaker) :
         if self.use_bond :
             self.bond_start_index = self.atom_start_index + self.num_atom_channels
 
-    def get_types(self, rdmol: Mol, **kwargs) -> NDArrayInt:
+    def get_types(self, rdmol: Mol, out: Optional[NDArrayInt] = None, **kwargs) -> NDArrayInt:
         assert self.use_features is False
-        if self.use_bond :
-            size = (rdmol.GetNumAtoms() + rdmol.GetNumBonds(),)
+        if out is None :
+            if self.use_bond :
+                size = (rdmol.GetNumAtoms() + rdmol.GetNumBonds(),)
+            else :
+                size = (rdmol.GetNumAtoms(),)
+            out = np.empty(size, dtype=np.int16)
         else :
-            size = (rdmol.GetNumAtoms(),)
-        out = np.empty(size, dtype=np.int16)
+            out.fill(0)
         return self._get_types(rdmol, out, **kwargs)
 
     def _get_types(self, rdmol: Mol, out: NDArrayInt, **kwargs) -> NDArrayInt :
         if self.use_bond :
             num_atoms = rdmol.GetNumAtoms()
+            num_bonds = rdmol.GetNumBonds()
             atom_types = [self.__get_atom_type(atom, **kwargs) for atom in rdmol.GetAtoms()]
             bond_types = [self.__get_bond_type(bond, **kwargs) for bond in rdmol.GetBonds()]
-            out[:num_atoms] = atom_types
-            out[num_atoms:] = bond_types
+            if num_atoms > 0 :
+                out[:num_atoms] = atom_types
+            if num_bonds > 0 :
+                out[num_atoms:] = bond_types
         else :
             out[:] = [self.__get_atom_type(atom, **kwargs) for atom in rdmol.GetAtoms()]
         return out
@@ -173,7 +195,7 @@ class MolSystemPointCloudMaker(PointCloudMaker) :
         ## type: self, *args: Tuple[AtomChannelGetter, Optional[BondChannelGetter]], mode: str
         assert channel_type in ['features', 'types'], f"channel_type(input: {channel_type}) should be 'features' or 'types'"
         self.channel_type = channel_type
-        self.use_features = use_features = (channel_type == 'features')
+        self.use_features = (channel_type == 'features')
 
         self.maker_list = []
         channel_offset = 0
@@ -189,7 +211,6 @@ class MolSystemPointCloudMaker(PointCloudMaker) :
         coords = kwargs.get('kwargs', self.get_coords(rdmol_list))
         channels = kwargs.get('channels', self.get_channels(rdmol_list, **kwargs))
         return coords, channels
-    __call__ = run
 
     def get_coords(self, rdmol_list: Mol) -> NDArrayFloat64:
         coords_list: List[NDArrayFloat64] = []
@@ -268,3 +289,18 @@ class MolSystemPointCloudMaker(PointCloudMaker) :
             maker._get_types(rdmol, out[object_offset:object_offset+num_objects], **kwargs) 
             object_offset += num_objects
         return out
+
+class ComplexPointCloudMaker(MolSystemPointCloudMaker) :
+    def __init__(
+            self,
+            ligand_atom_getter: AtomChannelGetter,
+            ligand_bond_getter: Optional[BondChannelGetter],
+            protein_atom_getter: AtomChannelGetter,
+            protein_bond_getter: Optional[BondChannelGetter],
+            channel_type: str = 'features'
+    ) :
+        super(ComplexPointCloudMaker, self).__init__(
+                (ligand_atom_getter, ligand_bond_getter),
+                (protein_atom_getter, protein_bond_getter),
+                channel_type
+        )

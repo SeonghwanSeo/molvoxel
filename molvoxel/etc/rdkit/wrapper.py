@@ -1,6 +1,5 @@
 import rdkit
 from rdkit import Chem
-import types
 import numpy as np
 
 from rdkit.Chem import Mol
@@ -8,7 +7,7 @@ from typing import Optional, Union, Dict, List, Any
 from numpy.typing import ArrayLike
 
 from molvoxel.voxelizer import BaseVoxelizer
-from molvoxel.rdkit.pointcloud import MolPointCloudMaker, MolSystemPointCloudMaker
+from .pointcloud import MolPointCloudMaker, MolSystemPointCloudMaker, ComplexPointCloudMaker
 
 class MolWrapper() :
     def __init__(self, pointcloudmaker: MolPointCloudMaker, voxelizer: BaseVoxelizer, visualizer: Optional[Any] = None) :
@@ -146,7 +145,7 @@ class MolSystemWrapper(MolWrapper) :
         self.visualizer.visualize_system(pse_path, rdmol_list, self.name_list, channel_dict_list, center, self.resolution, new_coords_list)
 
 class ComplexWrapper(MolSystemWrapper) :
-    def __init__(self, pointcloudmaker: MolSystemPointCloudMaker, voxelizer: BaseVoxelizer, visualizer: Optional[Any] = None) :
+    def __init__(self, pointcloudmaker: ComplexPointCloudMaker, voxelizer: BaseVoxelizer, visualizer: Optional[Any] = None) :
         super(ComplexWrapper, self).__init__(pointcloudmaker, voxelizer, ['Ligand', 'Protein'], visualizer)
 
     def run(

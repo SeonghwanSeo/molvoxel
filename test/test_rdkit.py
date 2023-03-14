@@ -3,14 +3,14 @@ import sys
 from rdkit import Chem
 
 from molvoxel.voxelizer.numpy import Voxelizer
-from molvoxel.rdkit.wrapper import MolWrapper, MolSystemWrapper, ComplexWrapper
-from molvoxel.rdkit.pointcloud import MolPointCloudMaker, MolSystemPointCloudMaker
-from molvoxel.rdkit.getter import AtomTypeGetter, BondTypeGetter
+from molvoxel.etc.rdkit.wrapper import MolWrapper, MolSystemWrapper, ComplexWrapper
+from molvoxel.etc.rdkit.pointcloud import MolPointCloudMaker, MolSystemPointCloudMaker
+from molvoxel.etc.rdkit.getter import AtomTypeGetter, BondTypeGetter
 
 save_dir = 'result_rdkit'
 if '-y' in sys.argv :
     pymol = True
-    from molvoxel.pymol import Visualizer
+    from molvoxel.etc.pymol import Visualizer
     visualizer = Visualizer()
     os.system(f'mkdir -p {save_dir}')
 else :

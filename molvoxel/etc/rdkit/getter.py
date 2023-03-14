@@ -17,7 +17,7 @@ class AtomTypeGetter(TypeGetter) :
         super(AtomTypeGetter, self).__init__(symbols, symbol_names, unknown)
 
     def get_type(self, atom: Atom, **kwargs) -> int :
-        return super().get_type(atom.GetSymbol())
+        return super().get_type(atom.GetSymbol(), **kwargs)
 
 """ BOND """
 BondChannelGetter = ChannelGetter
@@ -30,7 +30,7 @@ class BondTypeGetter(TypeGetter) :
         super(BondTypeGetter, self).__init__(bondtypes, bondtype_names, unknown)
 
     def get_type(self, bond: Bond, **kwargs) -> int :
-        return super().get_type(bond.GetBondType())
+        return super().get_type(bond.GetBondType(), **kwargs)
 
     @classmethod
     def default(cls) :

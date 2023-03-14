@@ -15,7 +15,7 @@ class FeatureGetter(ChannelGetter) :
         self.feature_getter = function
 
     def get_feature(self, input: Any, **kwargs) -> ArrayLike :
-        return self.feature_getter(input)
+        return self.feature_getter(input, **kwargs)
 
 class TypeGetter(ChannelGetter) :
     CHANNEL_TYPE='TYPE'
@@ -33,13 +33,14 @@ class TypeGetter(ChannelGetter) :
             res = [0] * self.num_channels
             res[idx] = 1
             return res
-        self.feature_list = [one_hot_encoding(idx) for idx in range(self.num_channels)]
+        self.feature_list = feature_list = [one_hot_encoding(idx) for idx in range(self.num_channels)]
+        self.feature_getter = lambda x: feature_list[type_dic[x]]
 
     def get_type(self, input: Any, **kwargs) -> int :
-        return self.type_getter(input)
+        return self.type_getter(input, **kwargs)
 
     def get_feature(self, input: Any, **kwargs) -> ArrayLike :
-        return self.feature_list[self.get_type(input)]
+        return self.feature_list[self.get_type(input, **kwargs)]
 
     def to_feature_getter(self) :
         return FeatureGetter(self.feature_getter, self.channels)

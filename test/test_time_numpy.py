@@ -1,8 +1,8 @@
 import numpy as np
 from rdkit import Chem
-from molvoxel.rdkit.wrapper import ComplexWrapper
-from molvoxel.rdkit.pointcloud import MolSystemPointCloudMaker
-from molvoxel.rdkit.getter import AtomTypeGetter, BondTypeGetter, AtomFeatureGetter
+from molvoxel.etc.rdkit.wrapper import ComplexWrapper
+from molvoxel.etc.rdkit.pointcloud import MolSystemPointCloudMaker
+from molvoxel.etc.rdkit.getter import AtomTypeGetter, BondTypeGetter, AtomFeatureGetter
 import time
 
 def run_test(voxelizer, grid, coords, center, channels, radii, random_translation = 0.5, random_rotation = True) :
