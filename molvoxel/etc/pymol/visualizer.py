@@ -34,7 +34,7 @@ class Visualizer() :
         grid_dict: Dict[str, ArrayLike],
         center: ArrayLike,
         resolution: float,
-        new_coords: Optional[ArrayLike]
+        new_coords: Optional[ArrayLike] = None,
     ) :
         if new_coords is not None :
             rdmol = self.__apply_coords(rdmol, new_coords)

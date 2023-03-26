@@ -71,7 +71,7 @@ class MolPointCloudMaker(PointCloudMaker) :
     def __call__(self, *args, **kwargs) :
         return self.run(*args, **kwargs)
 
-    def get_coords(self, rdmol: Mol) -> NDArrayFloat64:
+    def get_coords(self, rdmol: Mol) -> NDArrayFloat32:
         conf = rdmol.GetConformer()
         atom_coords = conf.GetPositions()
         if self.use_bond :
@@ -200,8 +200,12 @@ class MolSystemPointCloudMaker(PointCloudMaker) :
         self.maker_list = []
         channel_offset = 0
         channels = []
-        for atom_getter, bond_getter in args :
-            maker = _MolElementPointCloudMaker(atom_getter, bond_getter, channel_type, channel_offset)
+        for arg in args :
+            if isinstance(arg, MolPointCloudMaker) :
+                maker = _MolElementPointCloudMaker(arg.atom_getter, arg.bond_getter, channel_type, channel_offset)
+            else :
+                atom_getter, bond_getter = arg
+                maker = _MolElementPointCloudMaker(atom_getter, bond_getter, channel_type, channel_offset)
             self.maker_list.append(maker)
             channel_offset += maker.num_channels
             channels += maker.channels
