@@ -38,10 +38,10 @@ def main(Voxelizer, RandomTransform, pymol, device) :
 
         grid = wrapper.get_empty_grid()
 
-        print('Test 1: Binary: False, Channel-Wise Radii: False, Density: Gaussian (Default)')
+        print('Test 1: Radii Type: Scalar (Default), Density: Gaussian (Default)')
         test_name = 'ref'
-        ref_image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.0)
-        image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.0, out_grid=grid)
+        ref_image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.5)
+        image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.5, out_grid=grid)
         assert image is grid, 'INPLACE FAILE'
         assert np.less(np.abs(np.subtract(image.tolist(), ref_image.tolist())), 1e-5).all(), 'REPRODUCTION FAIL'
         if pymol :
@@ -49,24 +49,24 @@ def main(Voxelizer, RandomTransform, pymol, device) :
 
         print('Test 2: Small (One Block)')
         test_name = 'small'
-        image = wrapper_small.run(ligand_rdmol, protein_rdmol, center, radii=1.0)
+        image = wrapper_small.run(ligand_rdmol, protein_rdmol, center, radii=1.5)
         if pymol :
             wrapper_small.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
         print('Test 3: High Resolution')
         test_name = 'hr'
-        image = wrapper_hr.run(ligand_rdmol, protein_rdmol, center, radii=1.0)
+        image = wrapper_hr.run(ligand_rdmol, protein_rdmol, center, radii=1.5)
         if pymol :
             wrapper_hr.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
-        print('Test 4: Channel-Wise Radii: True')
+        print('Test 4: Radii Type: Channel-Wise')
         test_name = 'channel-wise'
         voxelizer.radii_type = 'channel-wise'
         image = wrapper.run(ligand_rdmol, protein_rdmol, center, channel_radii, out_grid = grid)
         if pymol :
             wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
-        print('Test 5: Atom-wise Radii: True')
+        print('Test 5: Radii Type: Atom-Wise')
         test_name = 'atom-wise'
         voxelizer.radii_type = 'atom-wise'
         image = wrapper.run(ligand_rdmol, protein_rdmol, center, atom_radii, out_grid = grid)
@@ -77,7 +77,7 @@ def main(Voxelizer, RandomTransform, pymol, device) :
         test_name = 'binary'
         voxelizer.density = 'binary'
         voxelizer.radii_type = 'scalar'
-        image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.0, out_grid = grid)
+        image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.5, out_grid = grid)
         if pymol :
             wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
@@ -89,7 +89,7 @@ def main(Voxelizer, RandomTransform, pymol, device) :
         T = transform.get_transform()
         new_ligand_coords, new_protein_coords = T(ligand_coords, center), T(protein_coords, center)
         ligand_rdmol, protein_rdmol = apply_coord(ligand_rdmol, new_ligand_coords), apply_coord(protein_rdmol, new_protein_coords)
-        image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.0, out_grid = grid)
+        image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.5, out_grid = grid)
         if pymol :
             wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 

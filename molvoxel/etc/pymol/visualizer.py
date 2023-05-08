@@ -18,13 +18,11 @@ CARTOON = 'Cartoon'
 LIGAND = 'Ligand'
 MOLECULE = 'Molecule'
 
-ligand_grid_color_dict = ATOMSYMBOL.copy()
-ligand_grid_color_dict.update(ligand_grid_color_dict)
-molecule_grid_color_dict = ligand_grid_color_dict
+_ligand_grid_color_dict = ATOMSYMBOL.copy()
+_protein_grid_color_dict = ATOMSYMBOL.copy()
+_protein_grid_color_dict['C'] = 'aqua'
 
-protein_grid_color_dict = ATOMSYMBOL.copy()
-protein_grid_color_dict['C'] = 'aqua'
-protein_grid_color_dict.update(protein_grid_color_dict)
+_molecule_grid_color_dict = _ligand_grid_color_dict
 
 class Visualizer() :
     def visualize_mol(
@@ -35,9 +33,12 @@ class Visualizer() :
         center: ArrayLike,
         resolution: float,
         new_coords: Optional[ArrayLike] = None,
+        grid_color_dict: Optional[Dict[str,str]] = None,
     ) :
         if new_coords is not None :
             rdmol = self.__apply_coords(rdmol, new_coords)
+        if grid_color_dict is None :
+            grid_color_dict = _molecule_grid_color_dict
         self.__launch_pymol()
 
         temp_dir = tempfile.TemporaryDirectory()
@@ -55,8 +56,9 @@ class Visualizer() :
             cmd.load(temp_grid_path)
             dx = key
             cmd.set_name('grid', dx)
-            if key in molecule_grid_color_dict :
-                cmd.color(molecule_grid_color_dict[key], dx)
+            color = grid_color_dict.get(key, None)
+            if color is not None :
+                cmd.color(color, dx)
             dx_dict.append(dx)
         cmd.group('Voxel', ' '.join(dx_dict))
 
@@ -84,8 +86,15 @@ class Visualizer() :
         center: ArrayLike,
         resolution: str,
         ligand_new_coords: Optional[ArrayLike] = None,
-        protein_new_coords: Optional[ArrayLike] = None
+        protein_new_coords: Optional[ArrayLike] = None,
+        ligand_grid_color_dict: Optional[Dict[str,str]] = None,
+        protein_grid_color_dict: Optional[Dict[str,str]] = None,
     ) :
+        if ligand_grid_color_dict is None :
+            ligand_grid_color_dict = _ligand_grid_color_dict
+        if protein_grid_color_dict is None :
+            protein_grid_color_dict = _protein_grid_color_dict
+
         if ligand_new_coords is not None :
             ligand_rdmol = self.__apply_coord(ligand_rdmol, ligand_new_coords)
         if protein_new_coords is not None :
@@ -117,8 +126,9 @@ class Visualizer() :
             cmd.load(temp_grid_path)
             dx = 'Ligand_' + key
             cmd.set_name('grid', dx)
-            if key in ligand_grid_color_dict :
-                cmd.color(ligand_grid_color_dict[key], dx)
+            color = ligand_grid_color_dict.get(key, None)
+            if color is not None :
+                cmd.color(color, dx)
             ligand_dx_dict.append(dx)
         cmd.group('LigandVoxel', ' '.join(ligand_dx_dict))
 
@@ -128,8 +138,9 @@ class Visualizer() :
             cmd.load(temp_grid_path)
             dx = 'Protein_' + key
             cmd.set_name('grid', dx)
-            if key in protein_grid_color_dict :
-                cmd.color(protein_grid_color_dict[key], dx)
+            color = protein_grid_color_dict.get(key, None)
+            if color is not None :
+                cmd.color(color, dx)
             protein_dx_dict.append(dx)
         cmd.group('ProteinVoxel', ' '.join(protein_dx_dict))
         cmd.group('Voxel', 'LigandVoxel ProteinVoxel')

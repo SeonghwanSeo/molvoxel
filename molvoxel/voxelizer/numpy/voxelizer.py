@@ -14,41 +14,22 @@ NDArrayFloat = Union[NDArray[np.float32], NDArray[np.float64]]
 NDArrayFloat64 = NDArray[np.float64]
 NDArrayBool = NDArray[np.bool_]
 
-"""
-radii: input value of molvoxel
-atom_size: radii * atom_scale           # atom boundary
-"""
-
 class Voxelizer(BaseVoxelizer) :
     LIB='Numpy'
     def __init__(
         self,
         resolution: float = 0.5,
         dimension: int = 64,
-        atom_scale: float = 1.5,
         radii_type: str = 'scalar',
-        density: str = 'gaussian',
+        density_type: str = 'gaussian',
         precision: int = 32,
-        blockdim: Optional[int] = None
+        blockdim: Optional[int] = None,
+        **kwargs
     ) :
-        super(Voxelizer, self).__init__(resolution, dimension, atom_scale, radii_type)
-        assert density in ['gaussian', 'binary']
-        self._density = density.lower()
-        self._gaussian = (self._density == 'gaussian')
+        super(Voxelizer, self).__init__(resolution, dimension, radii_type, density_type, **kwargs)
         assert precision in [32, 64]
         self.fp = np.float32 if precision == 32 else np.float64
         self._setup_block(blockdim)
-
-    @property
-    def density(self) -> str :
-        return self._density
-    
-    @density.setter
-    def density(self, density: str) :
-        density = density.lower()
-        assert density in ['gaussian', 'binary'], f'density ({density}) should be gaussian or binary'
-        self._density = density
-        self._gaussian = (density == 'gaussian')
 
     def _setup_block(self, blockdim) :
         blockdim = blockdim if blockdim is not None else 8
@@ -101,7 +82,6 @@ class Voxelizer(BaseVoxelizer) :
         else :
             features = channels
             return self.forward_features(coords, center, features, radii, random_translation, random_rotation, out_grid)
-
     __call__ = forward
 
     """ VECTOR """
@@ -137,7 +117,7 @@ class Voxelizer(BaseVoxelizer) :
             coords = coords.astype(np.float64)
         if features.dtype != self.fp :
             features = features.astype(self.fp)
-        if self._radii_type is not self.SCALAR :
+        if not np.isscalar(radii) :
             radii = radii.astype(self.fp)
 
         # Set Out
@@ -145,23 +125,17 @@ class Voxelizer(BaseVoxelizer) :
             C = features.shape[1]
             out_grid = self.get_empty_grid(C)
 
-        # Set Atom Radii
-        if self._radii_type is self.CHANNEL_WISE :
-            atom_size = radii.max() * self.atom_scale
-        else :
-            atom_size = radii * self.atom_scale
-
         # Clipping Overlapped Atoms
+        atom_size = radii.max() if self.is_radii_type_channel_wise else radii
         box_overlap = self._get_overlap(coords, atom_size)
         coords, features = coords[box_overlap], features[box_overlap]
-        if self._radii_type is self.ATOM_WISE :
+        if self.is_radii_type_atom_wise :
             radii = radii[box_overlap]
+            atom_size = radii
 
         # Run
         if self.num_blocks > 1 :
             blockdim = self.blockdim
-            if self._radii_type is self.ATOM_WISE :
-                atom_size = radii * self.atom_scale
             block_overlap_dict = self._get_overlap_blocks(coords, atom_size)
             
             for xidx, yidx, zidx in itertools.product(range(self.num_blocks), repeat=3) :
@@ -178,11 +152,10 @@ class Voxelizer(BaseVoxelizer) :
 
                 grid_block = self.grid_block_dict[(xidx, yidx, zidx)]
                 coords_block, features_block = coords[overlap], features[overlap]
-                radii_block = radii[overlap] if self._radii_type is self.ATOM_WISE else radii
+                radii_block = radii[overlap] if self.is_radii_type_atom_wise else radii
                 self._set_grid_features(coords_block, features_block, radii_block, grid_block, out_grid_block)
         else :
-            grid = self.grid
-            self._set_grid_features(coords, features, radii, grid, out_grid)
+            self._set_grid_features(coords, features, radii, self.grid, out_grid)
         
         return out_grid
 
@@ -193,9 +166,9 @@ class Voxelizer(BaseVoxelizer) :
         D = H = W = self.dimension
         assert features.shape[0] == V, f'atom features does not match number of atoms: {features.shape[0]} vs {V}'
         assert features.ndim == 2, f"atom features does not match dimension: {features.shape} vs {(V,'*')}"
-        if self._radii_type is self.SCALAR :
+        if self.is_radii_type_scalar :
             assert np.isscalar(radii), f'the radii type of voxelizer is `scalar`, radii should be scalar'
-        elif self._radii_type is self.CHANNEL_WISE :
+        elif self.is_radii_type_channel_wise :
             assert not np.isscalar(radii), f'the radii type of voxelizer is `channel-wise`, radii should be Array[{C},]'
             assert radii.shape == (C,), f'radii does not match dimension (number of channels,): {radii.shape} vs {(C,)}'
         else :
@@ -223,7 +196,7 @@ class Voxelizer(BaseVoxelizer) :
         features = features.T                                               # (V, C) -> (C, V)
         D, H, W, _ = grid.shape
         grid = grid.reshape(-1, 3)                                          # (DHW, 3)
-        if self._radii_type is self.CHANNEL_WISE :
+        if self.is_radii_type_channel_wise :
             if out_grid.data.contiguous :
                 _out_grid = out_grid.reshape(-1, D*H*W)
                 for type_idx in range(features.shape[0]) :
@@ -280,7 +253,7 @@ class Voxelizer(BaseVoxelizer) :
 
         # Set Out
         if out_grid is None :
-            if self._radii_type is self.CHANNEL_WISE :
+            if self.is_radii_type_channel_wise :
                 C = radii.shape[0]
             else :
                 C = np.max(types) + 1
@@ -288,22 +261,18 @@ class Voxelizer(BaseVoxelizer) :
         else :
             out_grid.fill(0.)
 
-        # Set Atom Radii
-        if self._radii_type is self.CHANNEL_WISE :
-            assert not np.isscalar(radii), \
-                    'Radii type indexed requires type indexed radii (np.ndarray(shape=(C,)))' 
-            radii = radii[types]           # (C, ) -> (V, )
-        atom_size = radii * self.atom_scale
-
         # Clipping Overlapped Atoms
+        if self.is_radii_type_channel_wise :
+            radii = radii[types]           # (C, ) -> (V, )
+        atom_size = radii
         box_overlap = self._get_overlap(coords, atom_size)
         coords, types = coords[box_overlap], types[box_overlap]
         radii = radii[box_overlap] if not np.isscalar(radii) else radii
+        atom_size = radii
 
         # Run
         if self.num_blocks > 1 :
             blockdim = self.blockdim
-            atom_size = radii * self.atom_scale
             block_overlap_dict = self._get_overlap_blocks(coords, atom_size)
 
             for xidx, yidx, zidx in itertools.product(range(self.num_blocks), repeat=3) :
@@ -322,8 +291,7 @@ class Voxelizer(BaseVoxelizer) :
                 radii_block = radii[overlap] if not np.isscalar(radii) else radii
                 self._set_grid_types(coords_block, types_block, radii_block, grid_block, out_grid_block)
         else :
-            grid = self.grid
-            self._set_grid_types(coords, types, radii, grid, out_grid)
+            self._set_grid_types(coords, types, radii, self.grid, out_grid)
 
         return out_grid
 
@@ -333,9 +301,9 @@ class Voxelizer(BaseVoxelizer) :
         C = np.max(types) + 1
         D = H = W = self.dimension
         assert types.shape == (V,), f"types does not match dimension: {types.shape} vs {(V,)}"
-        if self._radii_type is self.SCALAR :
+        if self.is_radii_type_scalar :
             assert np.isscalar(radii), f'the radii type of voxelizer is `scalar`, radii should be scalar'
-        elif self._radii_type is self.CHANNEL_WISE :
+        elif self.is_radii_type_channel_wise :
             assert not np.isscalar(radii), f'the radii type of voxelizer is `channel-wise`, radii should be Array[{C},]'
             assert radii.shape == (C,), f'radii does not match dimension (number of channels,): {radii.shape} vs {(C,)}'
         else :
@@ -439,17 +407,17 @@ class Voxelizer(BaseVoxelizer) :
         if not np.isscalar(radii) :
             radii = np.expand_dims(radii, -1)
         dr = np.divide(dist, radii)
-        if self._gaussian :
+        if self.is_density_type_gaussian :
             return self.__calc_grid_density_gaussian(dr)
         else :
             return self.__calc_grid_density_binary(dr)
 
     def __calc_grid_density_binary(self, dr: NDArrayFloat) -> NDArrayFloat :
-        return np.less(dr, self.atom_scale, dr)
+        return np.less_equal(dr, 1., dr)
 
     def __calc_grid_density_gaussian(self, dr: NDArrayFloat) -> NDArrayFloat :
-        out_grid = np.exp((dr ** 2) * -2)
-        out_grid[dr > self.atom_scale] = 0
+        out_grid = np.exp(-0.5 * ((dr / self._sigma) ** 2))
+        out_grid[dr > 1.] = 0
         return out_grid
 
     @staticmethod

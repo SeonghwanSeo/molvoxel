@@ -4,57 +4,72 @@ from typing import Tuple, Optional, Union
 from numpy.typing import ArrayLike
 
 class BaseVoxelizer() :
-    SCALAR = 0
-    CHANNEL_WISE = 1
-    ATOM_WISE = 2
+    RADII_TYPE_LIST = ['scalar', 'channel-wise', 'atom-wise']
+    DENSITY_TYPE_LIST = ['gaussian', 'binary']
     def __init__(
         self,
         resolution: float = 0.5,
         dimension: int = 48,
-        atom_scale: float = 1.5,
         radii_type: str = 'scalar',
+        density_type: str = 'gaussian',
+        **kwargs
     ) :
-        self._resolution = resolution
-        self._dimension = dimension
-        self._width = width = resolution * (dimension - 1)
+        assert radii_type in self.RADII_TYPE_LIST
+        assert density_type in self.DENSITY_TYPE_LIST
 
-        self.atom_scale = atom_scale
-        self.radii_type = radii_type
+        self._resolution: float = resolution
+        self._dimension: float = dimension
+        self._width: float = resolution * (dimension - 1)
 
-        self.upper_bound: float = width / 2.
-        self.lower_bound = -1 * self.upper_bound
-        self._spatial_dimension = (self._dimension, self._dimension, self._dimension)
+        self._radii_type: str = radii_type
+        self._density_type: str = density_type
+
+        self.upper_bound: float = self.width / 2.
+        self.lower_bound: float = -1 * self.upper_bound
+        self._spatial_dimension: Tuple[float, float, float] = (self._dimension, self._dimension, self._dimension)
+
+        if self._density_type == 'gaussian' :
+            self._sigma: float = kwargs.get('sigma', 1/3)
    
     @property
     def radii_type(self) -> str:
-        if self._radii_type == self.SCALAR :
-            return 'scalar'
-        elif self._radii_type == self.CHANNEL_WISE :
-            return 'channel-wise'
-        else :
-            return 'atom-wise'
+        return self._radii_type
     
     @radii_type.setter
     def radii_type(self, radii_type: str) :
-        assert radii_type in ['scalar', 'channel-wise', 'atom-wise']
-        if radii_type == 'scalar' :
-            self._radii_type = self.SCALAR
-        elif radii_type == 'channel-wise' :
-            self._radii_type = self.CHANNEL_WISE
-        else :
-            self._radii_type = self.ATOM_WISE
+        assert radii_type in self.RADII_TYPE_LIST
+        self._radii_type = radii_type
     
     @property
     def is_radii_type_scalar(self) :
-        return self._radii_type == self.SCALAR
+        return self._radii_type == 'scalar'
 
     @property
     def is_radii_type_channel_wise(self) :
-        return self._radii_type == self.CHANNEL_WISE
+        return self._radii_type == 'channel-wise'
 
     @property
     def is_radii_type_atom_wise(self) :
-        return self._radii_type == self.ATOM_WISE
+        return self._radii_type == 'atom-wise'
+
+    @property
+    def density_type(self) -> str :
+        return self._density_type
+    
+    @density_type.setter
+    def density_type(self, density_type: str, **kwargs) :
+        assert density_type in self.DENSITY_TYPE_LIST
+        self._density_type = density_type
+        if density_type == 'gaussian' :
+            self._sigma = kwargs.get('sigma', 1/3)
+
+    @property
+    def is_density_type_binary(self) :
+        return self._density_type == 'binary'
+
+    @property
+    def is_density_type_gaussian(self) :
+        return self._density_type == 'gaussian'
 
     def grid_dimension(self, num_channels: int) -> Tuple[int, int, int, int]:
         return (num_channels, self._dimension, self._dimension, self._dimension)
