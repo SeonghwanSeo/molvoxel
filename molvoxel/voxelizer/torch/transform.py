@@ -3,9 +3,9 @@ from torch import Tensor, FloatTensor
 
 from typing import Tuple, Union, Optional
 from ._quaternion import random_quaternion, apply_quaternion, Q
-from ..base import BaseRandomTransform
+from ..base.transform import BaseRandomTransform, BaseT
 
-class T() :
+class T(BaseT) :
     def __init__(self, translation: Optional[FloatTensor], quaternion: Optional[Q]) :
         self.translation = translation
         self.quaternion = quaternion
@@ -30,10 +30,9 @@ class T() :
         return cls(translation, quaternion)
 
 class RandomTransform(BaseRandomTransform) :
+    class_T = T
     def forward(self, coords: FloatTensor, center: Optional[FloatTensor]) -> FloatTensor:
         return do_random_transform(coords, center, self.random_translation, self.random_rotation)
-    def get_transform(self) -> T :
-        return T.create(self.random_translation, self.random_rotation)
 
 def do_transform(
     coords: FloatTensor,

@@ -1,7 +1,7 @@
 from rdkit import Chem
 from rdkit.Chem import BondType
 
-from typing import List, Optional
+from typing import Sequence, Optional
 from rdkit.Chem import Atom, Bond
 
 from .base import ChannelGetter, TypeGetter, FeatureGetter
@@ -11,7 +11,7 @@ AtomChannelGetter = ChannelGetter
 class AtomFeatureGetter(FeatureGetter) :
     pass
 class AtomTypeGetter(TypeGetter) :
-    def __init__(self, symbols: List[str], symbol_names: Optional[List[str]] = None, unknown: bool = False) :
+    def __init__(self, symbols: Sequence[str], symbol_names: Optional[Sequence[str]] = None, unknown: bool = False) :
         if symbol_names is None :
             symbol_names = symbols
         super(AtomTypeGetter, self).__init__(symbols, symbol_names, unknown)
@@ -24,7 +24,7 @@ BondChannelGetter = ChannelGetter
 class BondFeatureGetter(FeatureGetter) :
     pass
 class BondTypeGetter(TypeGetter) :
-    def __init__(self, bondtypes: List[BondType], bondtype_names: Optional[List[str]] = None, unknown: bool = False) :
+    def __init__(self, bondtypes: Sequence[BondType], bondtype_names: Optional[Sequence[str]] = None, unknown: bool = False) :
         if bondtype_names is None :
             bondtype_names = [str(bt) for bt in bondtypes]
         super(BondTypeGetter, self).__init__(bondtypes, bondtype_names, unknown)

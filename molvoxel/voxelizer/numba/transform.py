@@ -3,10 +3,10 @@ import numpy as np
 from typing import Tuple, Union, Optional
 from numpy.typing import NDArray
 from ._quaternion import random_quaternion, apply_quaternion, Q
-from ..base import BaseRandomTransform
+from ..base.transform import BaseRandomTransform, BaseT
 
 NDArrayFloat = NDArray[np.float_]
-class T() :
+class T(BaseT) :
     def __init__(self, translation: Optional[NDArrayFloat], quaternion: Optional[Q]) :
         self.translation = translation
         self.quaternion = quaternion
@@ -31,10 +31,9 @@ class T() :
         return cls(translation, quaternion)
 
 class RandomTransform(BaseRandomTransform) :
+    class_T=T
     def forward(self, coords: NDArrayFloat, center: Optional[NDArrayFloat]) -> NDArrayFloat:
         return do_random_transform(coords, center, self.random_translation, self.random_rotation)
-    def get_transform(self) -> T :
-        return T.create(self.random_translation, self.random_rotation)
 
 def do_transform(
     coords: NDArrayFloat,

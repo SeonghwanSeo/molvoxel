@@ -7,7 +7,7 @@ from numpy.typing import NDArray, ArrayLike
 from scipy.spatial.distance import cdist
 
 from molvoxel.voxelizer.base import BaseVoxelizer
-from .transform import do_random_transform
+from .transform import do_random_transform, RandomTransform
 
 NDArrayInt = NDArray[np.int16]
 NDArrayFloat = Union[NDArray[np.float32], NDArray[np.float64]]
@@ -16,6 +16,7 @@ NDArrayBool = NDArray[np.bool_]
 
 class Voxelizer(BaseVoxelizer) :
     LIB='Numpy'
+    transform_class=RandomTransform
     def __init__(
         self,
         resolution: float = 0.5,

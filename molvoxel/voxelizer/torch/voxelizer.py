@@ -7,10 +7,11 @@ from torch import Tensor, FloatTensor, LongTensor, BoolTensor
 from typing import Tuple, Union, Optional, Dict, List, Callable
 
 from molvoxel.voxelizer.base import BaseVoxelizer
-from .transform import do_random_transform
+from .transform import do_random_transform, RandomTransform
 
 class Voxelizer(BaseVoxelizer) :
     LIB='PyTorch'
+    transform_class=RandomTransform
     def __init__(
         self,
         resolution: float = 0.5,

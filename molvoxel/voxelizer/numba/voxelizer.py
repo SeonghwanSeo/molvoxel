@@ -7,7 +7,7 @@ from typing import Tuple, Union, Optional, Dict, List
 from numpy.typing import NDArray, ArrayLike
 
 from molvoxel.voxelizer.base import BaseVoxelizer
-from .transform import do_random_transform
+from .transform import RandomTransform, do_random_transform
 
 from . import func_features, func_types
 
@@ -17,6 +17,7 @@ NDArrayBool = NDArray[np.bool_]
 
 class Voxelizer(BaseVoxelizer) :
     LIB='Numba'
+    transform_class=RandomTransform
     def __init__(
         self,
         resolution: float = 0.5,

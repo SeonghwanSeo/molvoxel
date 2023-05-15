@@ -18,8 +18,8 @@ def create_random_transform(
 def create_voxelizer(
         resolution: float = 0.5,
         dimension: int = 64,
-        atom_scale: float = 1.5,
         radii_type: str = 'scalar',
+        density_type: str = 'gaussian',
         library: str = 'numpy',
         **kwargs,
     ) -> BaseVoxelizer:
@@ -30,4 +30,4 @@ def create_voxelizer(
         from .numpy import Voxelizer
     else :
         from .torch import Voxelizer
-    return Voxelizer(resolution, dimension, atom_scale, radii_type, **kwargs)
+    return Voxelizer(resolution, dimension, radii_type, density_type, **kwargs)

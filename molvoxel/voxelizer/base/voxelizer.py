@@ -2,8 +2,11 @@ import numpy as np
 
 from typing import Tuple, Optional, Union
 from numpy.typing import ArrayLike
+from .transform import BaseRandomTransform
 
 class BaseVoxelizer() :
+    LIB=None
+    transform_class=BaseRandomTransform
     RADII_TYPE_LIST = ['scalar', 'channel-wise', 'atom-wise']
     DENSITY_TYPE_LIST = ['gaussian', 'binary']
     def __init__(
