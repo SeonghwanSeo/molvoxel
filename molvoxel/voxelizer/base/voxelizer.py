@@ -1,12 +1,13 @@
 import numpy as np
 
-from typing import Tuple, Optional, Union
+from typing import Tuple, Optional, Union, Type
 from numpy.typing import ArrayLike
+from abc import ABCMeta, abstractmethod
 from .transform import BaseRandomTransform
 
-class BaseVoxelizer() :
+class BaseVoxelizer(metaclass=ABCMeta) :
     LIB=None
-    transform_class=BaseRandomTransform
+    transform_class: Type[BaseRandomTransform] = BaseRandomTransform
     RADII_TYPE_LIST = ['scalar', 'channel-wise', 'atom-wise']
     DENSITY_TYPE_LIST = ['gaussian', 'binary']
     def __init__(
@@ -21,7 +22,7 @@ class BaseVoxelizer() :
         assert density_type in self.DENSITY_TYPE_LIST
 
         self._resolution: float = resolution
-        self._dimension: float = dimension
+        self._dimension: int = dimension
         self._width: float = resolution * (dimension - 1)
 
         self._radii_type: str = radii_type
@@ -29,20 +30,20 @@ class BaseVoxelizer() :
 
         self.upper_bound: float = self.width / 2.
         self.lower_bound: float = -1 * self.upper_bound
-        self._spatial_dimension: Tuple[float, float, float] = (self._dimension, self._dimension, self._dimension)
+        self._spatial_dimension: Tuple[int, int, int] = (self._dimension, self._dimension, self._dimension)
 
         if self._density_type == 'gaussian' :
             self._sigma: float = kwargs.get('sigma', 1/3)
-   
+
     @property
     def radii_type(self) -> str:
         return self._radii_type
-    
+
     @radii_type.setter
     def radii_type(self, radii_type: str) :
         assert radii_type in self.RADII_TYPE_LIST
         self._radii_type = radii_type
-    
+
     @property
     def is_radii_type_scalar(self) :
         return self._radii_type == 'scalar'
@@ -78,7 +79,7 @@ class BaseVoxelizer() :
         return (num_channels, self._dimension, self._dimension, self._dimension)
 
     @property
-    def spatial_dimension(self) -> Tuple[int, int, int, int]:
+    def spatial_dimension(self) -> Tuple[int, int, int]:
         return self._spatial_dimension
 
     @property
@@ -98,7 +99,7 @@ class BaseVoxelizer() :
         self,
         coords: ArrayLike,
         center: Optional[ArrayLike],
-        channels: ArrayLike,
+        channels: Optional[ArrayLike],
         radii: Union[float, ArrayLike],
         random_translation: float = 0.0,
         random_rotation: bool = False,
@@ -107,14 +108,16 @@ class BaseVoxelizer() :
         """
         coords: (V, 3)
         center: (3,)
-        types: (V, C) or (V,)
+        types: (V, C) or (V,) or None
         radii: scalar or (V, ) of (C, )
         random_translation: float (nonnegative)
         random_rotation: bool
 
         out_grid: (C,D,H,W)
         """
-        if np.ndim(channels) == 1 :
+        if channels is None:
+            return self.forward_single(coords, center, radii, random_translation, random_rotation, out_grid)
+        elif np.ndim(channels) == 1 :
             types = channels
             return self.forward_types(coords, center, types, radii, random_translation, random_rotation, out_grid)
         else :
@@ -123,6 +126,7 @@ class BaseVoxelizer() :
 
     __call__ = forward
 
+    @abstractmethod
     def forward_types(
         self,
         coords: ArrayLike,
@@ -133,8 +137,9 @@ class BaseVoxelizer() :
         random_rotation: bool = False,
         out_grid: Optional[ArrayLike] = None
     ) -> ArrayLike :
-        raise NotImplementedError
+        pass
 
+    @abstractmethod
     def forward_features(
         self,
         coords: ArrayLike,
@@ -145,11 +150,24 @@ class BaseVoxelizer() :
         random_rotation: bool = False,
         out_grid: Optional[ArrayLike] = None
     ) -> ArrayLike :
-        raise NotImplementedError
+        pass
 
+    @abstractmethod
+    def forward_single(
+        self,
+        coords: ArrayLike,
+        center: Optional[ArrayLike],
+        radii: Union[float, ArrayLike],
+        random_translation: float = 0.0,
+        random_rotation: bool = False,
+        out_grid: Optional[ArrayLike] = None
+    ) -> ArrayLike :
+        pass
+
+    @abstractmethod
     def get_empty_grid(self, num_channels: int, batch_size: Optional[int] = None, init_zero: bool = False) -> ArrayLike:
-        raise NotImplementedError
+        pass
 
+    @abstractmethod
     def asarray(self, array: ArrayLike, obj: str) -> ArrayLike:
-        raise NotImplementedError
-
+        pass

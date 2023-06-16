@@ -36,17 +36,17 @@ class Visualizer() :
         grid_color_dict: Optional[Dict[str,str]] = None,
     ) :
         if new_coords is not None :
-            rdmol = self.__apply_coords(rdmol, new_coords)
+            rdmol = self._apply_coords(rdmol, new_coords)
         if grid_color_dict is None :
             grid_color_dict = _molecule_grid_color_dict
-        self.__launch_pymol()
+        self._launch_pymol()
 
         temp_dir = tempfile.TemporaryDirectory()
         temp_dirpath = Path(temp_dir.name)
         temp_mol_path = str(temp_dirpath / f'{MOLECULE}.sdf')
         temp_grid_path = str(temp_dirpath / 'grid.dx')
 
-        self.__save_rdmol(rdmol, temp_mol_path)
+        self._save_rdmol(rdmol, temp_mol_path)
         cmd.load(temp_mol_path)
         cmd.color('green', MOLECULE)
 
@@ -96,10 +96,10 @@ class Visualizer() :
             protein_grid_color_dict = _protein_grid_color_dict
 
         if ligand_new_coords is not None :
-            ligand_rdmol = self.__apply_coord(ligand_rdmol, ligand_new_coords)
+            ligand_rdmol = self._apply_coord(ligand_rdmol, ligand_new_coords)
         if protein_new_coords is not None :
-            protein_rdmol = self.__apply_coord(protein_rdmol, protein_new_coords)
-        self.__launch_pymol()
+            protein_rdmol = self._apply_coord(protein_rdmol, protein_new_coords)
+        self._launch_pymol()
         cmd.set_color('aqua', '[0, 150, 255]')
 
         temp_dir = tempfile.TemporaryDirectory()
@@ -108,11 +108,11 @@ class Visualizer() :
         temp_protein_path = str(temp_dirpath / f'{PROTEIN}.pdb')
         temp_grid_path = str(temp_dirpath / 'grid.dx')
 
-        self.__save_rdmol(ligand_rdmol, temp_ligand_path)
+        self._save_rdmol(ligand_rdmol, temp_ligand_path)
         cmd.load(temp_ligand_path)
         cmd.color('green', LIGAND)
 
-        self.__save_rdmol(protein_rdmol, temp_protein_path)
+        self._save_rdmol(protein_rdmol, temp_protein_path)
         cmd.load(temp_protein_path)
         cmd.copy(CARTOON, PROTEIN)
         cmd.color('aqua', PROTEIN)
@@ -175,9 +175,9 @@ class Visualizer() :
     ) :
         if new_coords_list is not None :
             for i in range(len(rdmol_list)) :
-                rdmol_list[i] = self.__apply_coord(rdmol_list[i], new_coords_list[i])
+                rdmol_list[i] = self._apply_coord(rdmol_list[i], new_coords_list[i])
 
-        self.__launch_pymol()
+        self._launch_pymol()
         temp_dir = tempfile.TemporaryDirectory()
         temp_dirpath = Path(temp_dir.name)
         temp_grid_path = str(temp_dirpath / 'grid.dx')
@@ -185,7 +185,7 @@ class Visualizer() :
         for rdmol, grid_dict, name in zip(rdmol_list, grid_dict_list, name_list) :
             temp_mol_path = str(temp_dirpath / f'{name}.sdf')
 
-            self.__save_rdmol(rdmol, temp_mol_path)
+            self._save_rdmol(rdmol, temp_mol_path)
             cmd.load(temp_mol_path)
             cmd.color('green', name)
 
@@ -216,14 +216,14 @@ class Visualizer() :
         cmd.save(pse_path)
                 
     @staticmethod
-    def __launch_pymol() :
+    def _launch_pymol() :
         pymol.pymol_argv = ['pymol', '-pcq']
         pymol.finish_launching(args=['pymol', '-pcq', '-K'])
         cmd.reinitialize()
         cmd.feedback('disable', 'all', 'everything')
 
     @staticmethod
-    def __apply_coords(rdmol: Mol, coords: ArrayLike) -> Mol :
+    def _apply_coords(rdmol: Mol, coords: ArrayLike) -> Mol :
         rdmol = Chem.Mol(rdmol)
         conf = rdmol.GetConformer()
         for i in range(rdmol.GetNumAtoms()) :
@@ -231,7 +231,7 @@ class Visualizer() :
         return rdmol
 
     @staticmethod
-    def __save_rdmol(rdmol, save_path, coords = None) :
+    def _save_rdmol(rdmol, save_path, coords = None) :
         rdmol = Chem.Mol(rdmol)
         if coords is not None :
             conf = rdmol.GetConformer()

@@ -5,13 +5,15 @@ from molvoxel.etc.rdkit.pointcloud import MolSystemPointCloudMaker
 from molvoxel.etc.rdkit.getter import AtomTypeGetter, BondTypeGetter, AtomFeatureGetter
 import time
 
-def run_test(voxelizer, grid, coords, center, channels, radii, random_translation = 0.5, random_rotation = True) :
+
+def run_test(voxelizer, grid, coords, center, channels, radii, random_translation=0.5, random_rotation=True):
     batch_size = grid.shape[0]
-    for i in range(batch_size) :
+    for i in range(batch_size):
         voxelizer.forward(coords, center, channels, radii, random_translation, random_rotation, out_grid=grid[i])
     return grid
 
-def main(voxelizer) :
+
+def main(voxelizer):
     batch_size = 16
     num_iteration = 25
     num_trial = 5
@@ -40,9 +42,12 @@ def main(voxelizer) :
     grid = wrapper_types.get_empty_grid(batch_size)
     center = voxelizer.asarray(center, 'center')
 
+    single_grid = voxelizer.get_empty_grid(1, batch_size)
+
     """ SANITY CHECK """
     print('Sanity Check')
-    for _ in range(2) :
+    for _ in range(2):
+        single_out = run_test(voxelizer, single_grid, coords, center, None, 1.0, random_translation=0.0, random_rotation=False).tolist()
         type_out = run_test(voxelizer, grid, coords, center, types, 1.0, random_translation=0.0, random_rotation=False).tolist()
         feature_out = run_test(voxelizer, grid, coords, center, features, 1.0, random_translation=0.0, random_rotation=False).tolist()
         type_out = np.array(type_out)
@@ -53,12 +58,27 @@ def main(voxelizer) :
     print('PASS\n')
 
     """ ATOM TYPE """
-    print('Test Atom Type')
+    print('Test Atom SINGLE')
     st_tot = time.time()
-    for i in range(num_trial) :
+    for i in range(num_trial):
         print(f'trial {i}')
         st = time.time()
-        for _ in range(num_iteration) :
+        for _ in range(num_iteration):
+            single_grid = run_test(voxelizer, single_grid, coords, center, None, 1.0)
+        end = time.time()
+        print(f'total time {(end-st)}')
+        print(f'time per run {(end-st) / batch_size / num_iteration}')
+        print()
+    end_tot = time.time()
+    print(f'times per run {(end_tot-st_tot) / batch_size / num_iteration / num_trial}\n')
+
+    """ ATOM TYPE """
+    print('Test Atom Type')
+    st_tot = time.time()
+    for i in range(num_trial):
+        print(f'trial {i}')
+        st = time.time()
+        for _ in range(num_iteration):
             grid = run_test(voxelizer, grid, coords, center, types, 1.0)
         end = time.time()
         print(f'total time {(end-st)}')
@@ -70,10 +90,10 @@ def main(voxelizer) :
     """ ATOM FEATURE """
     print('Test Atom Feature')
     st_tot = time.time()
-    for i in range(num_trial) :
+    for i in range(num_trial):
         print(f'trial {i}')
         st = time.time()
-        for _ in range(num_iteration) :
+        for _ in range(num_iteration):
             grid = run_test(voxelizer, grid, coords, center, features, 1.0)
         end = time.time()
         print(f'total time {(end-st)}')
@@ -82,7 +102,8 @@ def main(voxelizer) :
     end_tot = time.time()
     print(f'times per run {(end_tot-st_tot) / batch_size / num_iteration / num_trial}')
 
-if __name__ == '__main__' :
+
+if __name__ == '__main__':
     from molvoxel.voxelizer.numpy import Voxelizer
     resolution = 0.5
     dimension = 48

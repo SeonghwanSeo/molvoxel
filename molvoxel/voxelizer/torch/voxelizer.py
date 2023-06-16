@@ -88,13 +88,15 @@ class Voxelizer(BaseVoxelizer) :
         self,
         coords: FloatTensor,
         center: Optional[FloatTensor],
-        channels: Union[FloatTensor, LongTensor],
+        channels: Union[FloatTensor, LongTensor, None],
         radii: Union[float, FloatTensor],
         random_translation: float = 0.0,
         random_rotation: bool = False,
         out_grid: Optional[FloatTensor] = None
     ) -> FloatTensor :
-        if channels.dim() == 1 :
+        if channels is None :
+            return self.forward_single(coords, center, radii, random_translation, random_rotation, out_grid)
+        elif channels.dim() == 1 :
             types = channels
             return self.forward_types(coords, center, types, radii, random_translation, random_rotation, out_grid)
         else :
@@ -125,6 +127,11 @@ class Voxelizer(BaseVoxelizer) :
 
         out_grid: (C,D,H,W)
         """
+        coords = self.asarray(coords, 'coords')
+        center = self.asarray(center, 'center')
+        features = self.asarray(types, 'features')
+        if not isinstance(radii, float):
+            radii = self.asarray(radii, 'radii')
         self._check_args_features(coords, features, radii, out_grid)
 
         # Set Coordinate
@@ -252,6 +259,11 @@ class Voxelizer(BaseVoxelizer) :
 
         out_grid: (C,D,H,W)
         """
+        coords = self.asarray(coords, 'coords')
+        center = self.asarray(center, 'center')
+        types = self.asarray(types, 'types')
+        if not isinstance(radii, float):
+            radii = self.asarray(radii, 'radii')
         self._check_args_types(coords, types, radii, out_grid)
 
         # Set Coordinate
@@ -343,6 +355,110 @@ class Voxelizer(BaseVoxelizer) :
         res = res.view(-1, D, H, W)                         # (V, D, H, W)
         types = types.view(-1, 1, 1, 1).expand(res.size())  # (V, D, H, W)
         return out_grid.scatter_add_(0, types, res)
+
+    """ SINGLE """
+    @torch.no_grad()
+    def forward_single(
+        self,
+        coords: FloatTensor,
+        center: Optional[FloatTensor],
+        radii: Union[float, FloatTensor],
+        random_translation: float = 0.0,
+        random_rotation: bool = False,
+        out_grid: Optional[FloatTensor] = None
+    ) -> FloatTensor :
+        """
+        coords: (V, 3)
+        center: (3,)
+        radii: scalar or (V, )
+        random_translation: float (nonnegative)
+        random_rotation: bool
+
+        out_grid: (C,D,H,W)
+        """
+        coords = self.asarray(coords, 'coords')
+        center = self.asarray(center, 'center')
+        if not isinstance(radii, float):
+            radii = self.asarray(radii, 'radii')
+        self._check_args_single(coords, radii, out_grid)
+
+        # Set Coordinate
+        if center is not None :
+            coords = coords - center.view(1, 3)
+        coords = do_random_transform(coords, None, random_translation, random_rotation)
+
+        # Set Out
+        if out_grid is None :
+            out_grid = self.get_empty_grid(1, init_zero=True)
+        else :
+            out_grid.fill_(0.)
+
+        # Clipping Overlapped Atoms
+        atom_size = radii
+        box_overlap = self._get_overlap(coords, atom_size)
+        coords = coords[box_overlap]
+        radii = radii[box_overlap] if isinstance(radii, Tensor) else radii
+        atom_size = radii
+
+        # Run
+        if self.num_blocks > 1 :
+            blockdim = self.blockdim
+            block_overlap_dict = self._get_overlap_blocks(coords, atom_size)
+
+            for xidx, yidx, zidx in itertools.product(range(self.num_blocks), repeat=3) :
+                start_x, end_x = xidx*blockdim, (xidx+1)*blockdim
+                start_y, end_y = yidx*blockdim, (yidx+1)*blockdim
+                start_z, end_z = zidx*blockdim, (zidx+1)*blockdim
+
+                out_grid_block = out_grid[:, start_x:end_x, start_y:end_y, start_z:end_z]
+
+                overlap = block_overlap_dict[(xidx, yidx, zidx)]
+                if overlap.size(0) == 0 :
+                    continue
+
+                grid_block = self.grid_block_dict[(xidx, yidx, zidx)]
+                coords_block = coords[overlap]
+                radii_block = radii[overlap] if isinstance(radii, Tensor) else radii
+                self._set_grid_single(coords_block, radii_block, grid_block, out_grid_block)
+        else :
+            self._set_grid_single(coords, radii, self.grid, out_grid)
+
+        return out_grid
+
+    def _check_args_single(self, coords: FloatTensor, radii: Union[float,FloatTensor], 
+                    out_grid: Optional[FloatTensor] = None) :
+        V = coords.size(0)
+        D = H = W = self.dimension
+        assert not self.is_radii_type_channel_wise, 'Channel-Wise Radii Type is not supported'
+        if self.is_radii_type_scalar :
+            assert np.isscalar(radii), f'the radii type of voxelizer is `scalar`, radii should be scalar'
+        else :
+            assert not np.isscalar(radii), f'the radii type of voxelizer is `atom-wise`, radii should be Tensor[{V},]'
+            assert radii.shape == (V,), f'radii does not match dimension (number of atoms,): {radii.shape} vs {(V,)}'
+        if out_grid is not None :
+            assert out_grid.shape[0] == 1, 'Output channel should be 1'
+            assert out_grid.shape[1:] == (D, H, W), f'Output grid dimension incorrect: {out_grid.shape} vs {("*",D,H,W)}'
+
+    def _set_grid_single(
+        self,
+        coords: FloatTensor,
+        radii: Union[float, FloatTensor],
+        grid: FloatTensor,
+        out_grid: FloatTensor,
+    ) -> FloatTensor :
+        """
+        coords: (V, 3)
+        radii: scalar or (V, )
+        grid: (D, H, W, 3)
+
+        out_grid: (1, D, H, W)
+        """
+        D, H, W, _ = grid.size()
+        grid = grid.view(-1, 3)
+        res = self._calc_grid(coords, radii, grid)          # (V, D*H*W)
+        res = res.view(-1, D, H, W)                         # (V, D, H, W)
+        torch.sum(res, dim=0, keepdim=True, out=out_grid)
+        return out_grid
 
     """ COMMON BLOCK DIVISION """
     def _get_overlap(
