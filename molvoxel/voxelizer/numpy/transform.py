@@ -6,12 +6,14 @@ from ._quaternion import random_quaternion, apply_quaternion, Q
 from ..base.transform import BaseRandomTransform, BaseT
 
 NDArrayFloat = NDArray[np.float_]
-class T(BaseT) :
-    def __init__(self, translation: Optional[NDArrayFloat], quaternion: Optional[Q]) :
+
+
+class T(BaseT):
+    def __init__(self, translation: Optional[NDArrayFloat], quaternion: Optional[Q]):
         self.translation = translation
         self.quaternion = quaternion
 
-    def __call__(self, coords, center) :
+    def __call__(self, coords, center):
         return do_transform(coords, center, self.translation, self.quaternion)
 
     @classmethod
@@ -19,21 +21,24 @@ class T(BaseT) :
         cls,
         random_translation: float = 0.0,
         random_rotation: bool = False,
-    ) :
+    ):
         if random_translation > 0.0:
-            translation = np.random.uniform(-random_translation, random_translation, size=(1,3)).astype(np.float32)
-        else :
+            translation = np.random.uniform(-random_translation, random_translation, size=(1, 3)).astype(np.float32)
+        else:
             translation = None
-        if random_rotation :
+        if random_rotation:
             quaternion = random_quaternion()
-        else :
+        else:
             quaternion = None
         return cls(translation, quaternion)
 
-class RandomTransform(BaseRandomTransform) :
-    class_T=T
+
+class RandomTransform(BaseRandomTransform):
+    class_T = T
+
     def forward(self, coords: NDArrayFloat, center: Optional[NDArrayFloat]) -> NDArrayFloat:
         return do_random_transform(coords, center, self.random_translation, self.random_rotation)
+
 
 def do_transform(
     coords: NDArrayFloat,
@@ -41,18 +46,19 @@ def do_transform(
     translation: Optional[NDArrayFloat] = None,
     quaternion: Optional[Q] = None,
 ) -> NDArrayFloat:
-    if quaternion is not None :
-        if center is not None :
-            center = center.reshape(1,3)
+    if quaternion is not None:
+        if center is not None:
+            center = center.reshape(1, 3)
             coords = apply_quaternion(coords - center, quaternion)
             coords += center
-        else :
+        else:
             coords = apply_quaternion(coords, quaternion)
-        if translation is not None :
+        if translation is not None:
             coords += translation
-    if translation is not None :
+    if translation is not None:
         coords = coords + translation
     return coords
+
 
 def do_random_transform(
     coords: NDArrayFloat,
@@ -61,14 +67,14 @@ def do_random_transform(
     random_rotation: bool = False,
 ) -> NDArray:
 
-    if random_rotation :
+    if random_rotation:
         quaternion = random_quaternion()
-    else :
+    else:
         quaternion = None
 
-    if (random_translation is not None) and (random_translation > 0.0) :
-        translation = np.random.uniform(-random_translation, random_translation, size=(1,3)).astype(np.float32)
-    else :
+    if (random_translation is not None) and (random_translation > 0.0):
+        translation = np.random.uniform(-random_translation, random_translation, size=(1, 3)).astype(np.float32)
+    else:
         translation = None
-    
+
     return do_transform(coords, center, translation, quaternion)

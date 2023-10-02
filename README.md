@@ -1,5 +1,5 @@
 # MolVoxel: Molecular Voxelization Tool
-MolVoxel is easy-to-use **Molecular Voxelization Tool** implemented in Python.
+MolVoxel is an easy-to-use **Molecular Voxelization Tool** implemented in Python.
 
 It requires few dependencies, so you can install it very simply. If you want to use numba version, just install numba.
 
@@ -8,18 +8,31 @@ It requires few dependencies, so you can install it very simply. If you want to 
 - Required
   - Numpy
 - Optional
-  - SciPy - `from molvoxel.numpy import Voxelizer`
-  - Numba - `from molvoxel.numba import Voxelizer`
-  - PyTorch - `from molvoxel.torch import Voxelizer`, **CUDA Available**
+  - SciPy - `from molvoxel.voxelizer.numpy import Voxelizer`
+  - Numba - `from molvoxel.voxelizer.numba import Voxelizer`
+  - PyTorch - `from molvoxel.voxelizer.torch import Voxelizer`, **CUDA Available**
   - RDKit, pymol-open-source
 
 ## Quick Start
 
-### Numpy
+### Create Voxelizer Object
+```python
+import molvoxel
+
+# Default (gaussian sigma = 0.5)
+voxelizer = molvoxel.create_voxelizer(resolution=0.5, dimension=64, density_type='gaussian', library='numpy')
+# Set gaussian sigma = 0.5, spatial dimension = (48, 48, 48)
+voxelizer = molvoxel.create_voxelizer(dimension=48, density_type='gaussian', sigma=0.5, library='numba')
+# Set binary density
+voxelizer = molvoxel.create_voxelizer(density_type='binary', library='torch')
+# CUDA
+voxelizer = molvoxel.create_voxelizer(library='torch', device='cuda')
+```
+
+### Create Voxel
+#### Numpy, Numba
 
 ```python
-# SciPy is required
-from molvoxel.voxelizer.numpy import Voxelizer
 from rdkit import Chem  # rdkit is not required packages
 import numpy as np
 
@@ -37,29 +50,15 @@ atom_features = [get_atom_features(atom) for atom in mol.GetAtoms()]
 atom_features = np.array(atom_features)                     # (V, 5)
 radii = 1.0
 
-voxelizer = Voxelizer(resolution = 0.5, dimension = 64)
-image = voxelizer(coords, center, None, radii)              # (1, 64, 64, 64)
-image = voxelizer(coords, center, atom_types, radii)        # (4, 64, 64, 64)
-image = voxelizer(coords, center, atom_features, radii)     # (5, 64, 64, 64)
+image = voxelizer.forward_single(coords, center, radii)                   # (1, 64, 64, 64)
+image = voxelizer.forward_types(coords, center, atom_types, radii)        # (4, 64, 64, 64)
+image = voxelizer.forward_features(coords, center, atom_features, radii)  # (5, 64, 64, 64)
 ```
 
-### Numba
-
-```python
-# Numba is required
-from molvoxel.voxelizer.numba import Voxelizer
-
-voxelizer = Voxelizer(resolution = 0.5, dimension = 32)
-image = voxelizer(coords, center, None, radii)              # (1, 64, 64, 64)
-image = voxelizer(coords, center, atom_types, radii)        # (4, 32, 32, 32)
-image = voxelizer(coords, center, atom_features, radii)     # (5, 32, 32, 32)
-```
-
-### PyTorch - Cuda Available
+#### PyTorch - Cuda Available
 
 ```python
 # PyTorch is required
-from molvoxel.voxelizer.torch import Voxelizer
 import torch
 
 device = 'cuda' # or 'cpu'
@@ -68,10 +67,9 @@ center = torch.FloatTensor(center).to(device)               # (3,)
 atom_types = torch.LongTensor(atom_types).to(device)        # (V,)
 atom_features = torch.FloatTensor(atom_features).to(device) # (V, 5)
 
-voxelizer = Voxelizer(resolution = 0.5, dimension = 32, device = device)
-image = voxelizer(coords, center, None, radii)              # (1, 64, 64, 64)
-image = voxelizer(coords, center, atom_types, radii)        # (4, 32, 32, 32)
-image = voxelizer(coords, center, atom_features, radii)     # (5, 32, 32, 32)
+image = voxelizer.forward_single(coords, center, radii)                   # (1, 64, 64, 64)
+image = voxelizer.forward_types(coords, center, atom_types, radii)        # (4, 32, 32, 32)
+image = voxelizer.forward_features(coords, center, atom_features, radii)  # (5, 32, 32, 32)
 ```
 ---
 
@@ -103,3 +101,4 @@ pointcloudmaker = MolPointCloudMaker(atom_getter, bond_getter, channel_type='typ
 wrapper = MolWrapper(pointcloudmaker, voxelizer, visualizer)
 image = wrapper.run(rdmol, center, radii=1.0)
 ```
+
