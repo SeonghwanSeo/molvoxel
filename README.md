@@ -38,8 +38,9 @@ atom_features = np.array(atom_features)                     # (V, 5)
 radii = 1.0
 
 voxelizer = Voxelizer(resolution = 0.5, dimension = 64)
-image = voxelizer(coords, center, atom_types, radii)          # (4, 64, 64, 64)
-image = voxelizer(coords, center, atom_features, radii)       # (5, 64, 64, 64)
+image = voxelizer(coords, center, None, radii)              # (1, 64, 64, 64)
+image = voxelizer(coords, center, atom_types, radii)        # (4, 64, 64, 64)
+image = voxelizer(coords, center, atom_features, radii)     # (5, 64, 64, 64)
 ```
 
 ### Numba
@@ -49,8 +50,9 @@ image = voxelizer(coords, center, atom_features, radii)       # (5, 64, 64, 64)
 from molvoxel.voxelizer.numba import Voxelizer
 
 voxelizer = Voxelizer(resolution = 0.5, dimension = 32)
-image = voxelizer(coords, center, atom_types, radii)          # (4, 32, 32, 32)
-image = voxelizer(coords, center, atom_features, radii)       # (5, 32, 32, 32)
+image = voxelizer(coords, center, None, radii)              # (1, 64, 64, 64)
+image = voxelizer(coords, center, atom_types, radii)        # (4, 32, 32, 32)
+image = voxelizer(coords, center, atom_features, radii)     # (5, 32, 32, 32)
 ```
 
 ### PyTorch - Cuda Available
@@ -67,20 +69,9 @@ atom_types = torch.LongTensor(atom_types).to(device)        # (V,)
 atom_features = torch.FloatTensor(atom_features).to(device) # (V, 5)
 
 voxelizer = Voxelizer(resolution = 0.5, dimension = 32, device = device)
-image = voxelizer(coords, center, atom_types, radii)          # (4, 32, 32, 32)
-image = voxelizer(coords, center, atom_features, radii)       # (5, 32, 32, 32)
-```
-
-### RDKit Wrapper
-``` python
-# RDKit is required
-from molvoxel.rdkit import AtomTypeGetter, BondTypeGetter, MolPointCloudMaker, MolWrapper
-atom_getter = AtomTypeGetter(['C', 'N', 'O', 'S'])
-bond_getter = BondTypeGetter.default()		# (SINGLE, DOUBLE, TRIPLE, AROMATIC)
-
-pointcloudmaker = MolPointCloudMaker(atom_getter, bond_getter, channel_type='types')
-wrapper = MolWrapper(pointcloudmaker, voxelizer, visualizer)
-image = wrapper.run(rdmol, center, radii=1.0)
+image = voxelizer(coords, center, None, radii)              # (1, 64, 64, 64)
+image = voxelizer(coords, center, atom_types, radii)        # (4, 32, 32, 32)
+image = voxelizer(coords, center, atom_features, radii)     # (5, 32, 32, 32)
 ```
 ---
 
@@ -101,3 +92,14 @@ pip install -e .
 # pip install -e '.[numpy, numba, torch, rdkit]'
 ```
 
+## RDKit Wrapper
+``` python
+# RDKit is required
+from molvoxel.rdkit import AtomTypeGetter, BondTypeGetter, MolPointCloudMaker, MolWrapper
+atom_getter = AtomTypeGetter(['C', 'N', 'O', 'S'])
+bond_getter = BondTypeGetter.default()		# (SINGLE, DOUBLE, TRIPLE, AROMATIC)
+
+pointcloudmaker = MolPointCloudMaker(atom_getter, bond_getter, channel_type='types')
+wrapper = MolWrapper(pointcloudmaker, voxelizer, visualizer)
+image = wrapper.run(rdmol, center, radii=1.0)
+```
