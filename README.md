@@ -1,16 +1,20 @@
-# MolVoxel: Molecular Voxelization Tool
-MolVoxel is an easy-to-use **Molecular Voxelization Tool** implemented in Python.
+![pypi](https://img.shields.io/pypi/v/molvoxel.svg?logo=pypi)
+![versions](https://img.shields.io/pypi/pyversions/molvoxel.svg?logo=python)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-It requires few dependencies, so it's very simple to install and use. If you want to use numba version, just install numba additionally.
+# MolVoxel: Molecular Voxelization Tool
+
+MolVoxel is an Easy-to-Use **Molecular Voxelization Tool** implemented in Python.
+
+It requires minimal dependencies, so it's very simple to install and use. If you want to use numba version, just install numba additionally.
 
 ### Dependencies
 
 - Required
-  - Numpy
+  - Numpy, SciPy
 - Optional
-  - SciPy - `from molvoxel.voxelizer.numpy import Voxelizer`
-  - Numba - `from molvoxel.voxelizer.numba import Voxelizer`
-  - PyTorch - `from molvoxel.voxelizer.torch import Voxelizer`, **CUDA Available**
+  - Numba
+  - PyTorch, **CUDA Available**
   - RDKit, pymol-open-source
 
 ### Citation
@@ -25,9 +29,18 @@ It requires few dependencies, so it's very simple to install and use. If you wan
 }
 ```
 
+
+
 ## Quick Start
 
-### Create Voxelizer Object
+### Installation
+
+```shell
+pip install molvoxel
+pip install molvoxel[numba, torch, rdkit]	# Optional Dependencies
+```
+
+### Configuring Voxelizer Object
 ```python
 import molvoxel
 # Default (Gaussian sigma = 0.5)
@@ -40,7 +53,7 @@ voxelizer = molvoxel.create_voxelizer(density_type='binary', library='torch')
 voxelizer = molvoxel.create_voxelizer(library='torch', device='cuda')
 ```
 
-### Create Voxel
+### Voxelization
 #### Numpy, Numba
 
 ```python
@@ -57,7 +70,7 @@ coords = mol.GetConformer().GetPositions()                                      
 center = coords.mean(axis=0)                                                    # (3,)
 atom_types = np.array([channels[atom.GetSymbol()] for atom in mol.GetAtoms()])  # (V,)
 atom_features = np.array([get_atom_features(atom) for atom in mol.GetAtoms()])  # (V, 5)
-atom_radius = 1.0                                                               # (scalar)
+atom_radius = 1.0                                                               # scalar
 
 image = voxelizer.forward_single(coords, center, atom_radius)                   # (1, 64, 64, 64)
 image = voxelizer.forward_types(coords, center, atom_types, atom_radius)        # (4, 64, 64, 64)
@@ -80,26 +93,8 @@ image = voxelizer.forward_single(coords, center, atom_radius)                   
 image = voxelizer.forward_types(coords, center, atom_types, atom_radius)        # (4, 32, 32, 32)
 image = voxelizer.forward_features(coords, center, atom_features, atom_radius)  # (5, 32, 32, 32)
 ```
----
 
-## Installation
 
-```shell
-# Required: numpy
-# Not Required, but Recommended: RDKit
-# Optional - Numpy: scipy
-# Optional - Numba: numba
-# Optional - PyTorch : torch
-# Optional - Visualization : pymol-open-source (conda)
-git clone https://github.com/SeonghwanSeo/molvoxel.git
-cd molvoxel/
-pip install -e .
-
-# With extras_require
-# pip install -e '.[numpy, numba, torch, rdkit]'
-```
-
----
 
 ## Voxelization
 
@@ -147,7 +142,7 @@ $$
 I_{d,h,w,:} = \sum_{n}^{N} F_n \times f(||X_n - G_{d,h,w}||,R_n,\sigma)
 $$
 
----
+
 
 ## RDKit Wrapper
 
