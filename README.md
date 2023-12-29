@@ -1,4 +1,4 @@
-![pypi](https://img.shields.io/pypi/v/molvoxel.svg?logo=pypi)
+[![pypi](https://img.shields.io/pypi/v/molvoxel.svg?logo=pypi)](https://pypi.org/project/molvoxel/)
 ![versions](https://img.shields.io/pypi/pyversions/molvoxel.svg?logo=python)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 

@@ -1,18 +1,20 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 with open('./README.md', encoding='utf-8') as f:
     long_description = f.read()
 
+PACKAGES = find_packages('./')
+
 setup(
     name='molvoxel',
-    version='0.1.2',
+    version='0.1.3-a0',
     description='MolVoxel:Easy-to-Use Molecular Voxelization Tool',
     long_description=long_description,
     long_description_content_type='text/markdown',
     author='Seonghwan Seo',
     author_email='shwan0106@gmail.com',
     url='https://github.com/SeonghwanSeo/molvoxel',
-    packages=['molvoxel/'],
+    packages=PACKAGES,
     install_requires=['numpy', 'scipy'],
     extras_require={
             'numba': ['numba'],
