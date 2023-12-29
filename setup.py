@@ -7,7 +7,7 @@ PACKAGES = find_packages('./')
 
 setup(
     name='molvoxel',
-    version='0.1.3-a0',
+    version='0.1.3',
     description='MolVoxel:Easy-to-Use Molecular Voxelization Tool',
     long_description=long_description,
     long_description_content_type='text/markdown',

@@ -43,11 +43,11 @@ pip install molvoxel[numba, torch, rdkit]	# Optional Dependencies
 ### Configuring Voxelizer Object
 ```python
 import molvoxel
-# Default (Gaussian sigma = 0.5)
-voxelizer = molvoxel.create_voxelizer(resolution=0.5, dimension=64, density_type='gaussian', library='numpy')
-# Set gaussian sigma = 1.0, spatial dimension = (48, 48, 48)
+# Default (Resolution: 0.5, dimension: 64, density_type: gaussian, sigma: 0.5, library='numpy')
+voxelizer = molvoxel.create_voxelizer()
+# Set gaussian sigma = 1.0, spatial dimension = (48, 48, 48) with numba library
 voxelizer = molvoxel.create_voxelizer(dimension=48, density_type='gaussian', sigma=1.0, library='numba')
-# Set binary density
+# Set binary density with torch library
 voxelizer = molvoxel.create_voxelizer(density_type='binary', library='torch')
 # CUDA
 voxelizer = molvoxel.create_voxelizer(library='torch', device='cuda')
