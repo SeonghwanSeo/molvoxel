@@ -5,16 +5,17 @@ from rdkit import Chem
 
 from utils import apply_coord
 
-def main(Voxelizer, RandomTransform, pymol) :
-    if pymol :
+
+def main(Voxelizer, RandomTransform, pymol):
+    if pymol:
         from molvoxel.etc.pymol import Visualizer
 
     """ SET FUNCTION """
-    def test(ligand_rdmol, protein_rdmol, atom_radii, save_dir) :
-        if pymol :
+    def test(ligand_rdmol, protein_rdmol, atom_radii, save_dir):
+        if pymol:
             os.system(f'mkdir -p {save_dir}')
             visualizer = Visualizer()
-        else :
+        else:
             visualizer = None
 
         ligand_coords = ligand_rdmol.GetConformer().GetPositions()
@@ -25,8 +26,8 @@ def main(Voxelizer, RandomTransform, pymol) :
         ligand_atom_radii = atom_radii[:ligand_rdmol.GetNumAtoms()]
         protein_atom_radii = atom_radii[ligand_rdmol.GetNumAtoms():]
 
-        voxelizer = Voxelizer() #resolution=0.5, dimension=64, atom_scale=1.5, radii_type='scalar', density='gaussian'
-        voxelizer_small = Voxelizer(0.5, 16, blockdim = 16)
+        voxelizer = Voxelizer()  # resolution=0.5, dimension=64, atom_scale=1.5, radii_type='scalar', density='gaussian'
+        voxelizer_small = Voxelizer(0.5, 16, blockdim=16)
         voxelizer_hr = Voxelizer(0.4, 64)
 
         transform = RandomTransform(random_translation=0.5, random_rotation=True)
@@ -40,7 +41,7 @@ def main(Voxelizer, RandomTransform, pymol) :
         protein_image = voxelizer.forward_single(protein_coords, center, radii=1.0, out_grid=protein_grid)
         assert ligand_image is ligand_grid, 'INPLACE FAILE'
         assert protein_image is protein_grid, 'INPLACE FAILE'
-        if pymol :
+        if pymol:
             assert visualizer is not None
             visualizer.visualize_complex(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, {'Atom': ligand_image.squeeze(0)}, {'Atom': protein_image.squeeze(0)}, center, resolution=voxelizer.resolution)
 
@@ -48,7 +49,7 @@ def main(Voxelizer, RandomTransform, pymol) :
         test_name = 'small'
         ligand_image = voxelizer_small.forward_single(ligand_coords, center, radii=1.0)
         protein_image = voxelizer_small.forward_single(protein_coords, center, radii=1.0)
-        if pymol :
+        if pymol:
             assert visualizer is not None
             visualizer.visualize_complex(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, {'Atom': ligand_image.squeeze(0)}, {'Atom': protein_image.squeeze(0)}, center, resolution=voxelizer.resolution)
 
@@ -58,7 +59,7 @@ def main(Voxelizer, RandomTransform, pymol) :
         protein_image = voxelizer_hr.forward_single(protein_coords, center, radii=1.0, out_grid=protein_grid)
         assert ligand_image is ligand_grid, 'INPLACE FAILE'
         assert protein_image is protein_grid, 'INPLACE FAILE'
-        if pymol :
+        if pymol:
             assert visualizer is not None
             visualizer.visualize_complex(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, {'Atom': ligand_image.squeeze(0)}, {'Atom': protein_image.squeeze(0)}, center, resolution=voxelizer.resolution)
 
@@ -69,7 +70,7 @@ def main(Voxelizer, RandomTransform, pymol) :
         protein_image = voxelizer.forward_single(protein_coords, center, radii=protein_atom_radii, out_grid=protein_grid)
         assert ligand_image is ligand_grid, 'INPLACE FAILE'
         assert protein_image is protein_grid, 'INPLACE FAILE'
-        if pymol :
+        if pymol:
             assert visualizer is not None
             visualizer.visualize_complex(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, {'Atom': ligand_image.squeeze(0)}, {'Atom': protein_image.squeeze(0)}, center, resolution=voxelizer.resolution)
 
@@ -81,7 +82,7 @@ def main(Voxelizer, RandomTransform, pymol) :
         protein_image = voxelizer.forward_single(protein_coords, center, radii=1.0, out_grid=protein_grid)
         assert ligand_image is ligand_grid, 'INPLACE FAILE'
         assert protein_image is protein_grid, 'INPLACE FAILE'
-        if pymol :
+        if pymol:
             assert visualizer is not None
             visualizer.visualize_complex(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, {'Atom': ligand_image.squeeze(0)}, {'Atom': protein_image.squeeze(0)}, center, resolution=voxelizer.resolution)
 
@@ -96,7 +97,7 @@ def main(Voxelizer, RandomTransform, pymol) :
         protein_image = voxelizer.forward_single(new_protein_coords, center, radii=1.0, out_grid=protein_grid)
         assert ligand_image is ligand_grid, 'INPLACE FAILE'
         assert protein_image is protein_grid, 'INPLACE FAILE'
-        if pymol :
+        if pymol:
             assert visualizer is not None
             visualizer.visualize_complex(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, {'Atom': ligand_image.squeeze(0)}, {'Atom': protein_image.squeeze(0)}, center, resolution=voxelizer.resolution)
 
@@ -115,10 +116,11 @@ def main(Voxelizer, RandomTransform, pymol) :
     save_dir = 'result_single'
     test(ligand_rdmol, protein_rdmol, atom_radii, save_dir)
 
-if __name__ == '__main__' :
-    if '-y' in sys.argv :
+
+if __name__ == '__main__':
+    if '-y' in sys.argv:
         pymol = True
-    else :
+    else:
         pymol = False
 
     from molvoxel.voxelizer.numpy import Voxelizer, RandomTransform

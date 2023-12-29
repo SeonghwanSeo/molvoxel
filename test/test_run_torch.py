@@ -8,26 +8,27 @@ from rdkit import Chem
 
 from utils import apply_coord
 
-def main(Voxelizer, RandomTransform, pymol, device) :
+
+def main(Voxelizer, RandomTransform, pymol, device):
     import torch
 
-    if pymol :
+    if pymol:
         from molvoxel.etc.pymol import Visualizer
 
     """ SET FUNCTION """
-    def test(pointcloudmaker, ligand_rdmol, protein_rdmol, channel_radii, atom_radii, save_dir) :
-        if pymol :
+    def test(pointcloudmaker, ligand_rdmol, protein_rdmol, channel_radii, atom_radii, save_dir):
+        if pymol:
             os.system(f'mkdir -p {save_dir}')
             visualizer = Visualizer()
-        else :
+        else:
             visualizer = None
 
         ligand_coords = ligand_rdmol.GetConformer().GetPositions()
         ligand_center = ligand_coords.mean(axis=0)
         center = ligand_center
 
-        voxelizer = Voxelizer(device = device) #resolution=0.5, dimension=64, atom_scale=1.5, radii_type='scalar', density='gaussian'
-        voxelizer_small = Voxelizer(0.5, 16, blockdim = 16, device=device)
+        voxelizer = Voxelizer(device=device)  # resolution=0.5, dimension=64, atom_scale=1.5, radii_type='scalar', density='gaussian'
+        voxelizer_small = Voxelizer(0.5, 16, blockdim=16, device=device)
         voxelizer_hr = Voxelizer(0.4, 64, device=device)
 
         transform = RandomTransform(random_translation=0.5, random_rotation=True)
@@ -44,41 +45,41 @@ def main(Voxelizer, RandomTransform, pymol, device) :
         image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.5, out_grid=grid)
         assert image is grid, 'INPLACE FAILE'
         assert np.less(np.abs(np.subtract(image.tolist(), ref_image.tolist())), 1e-5).all(), 'REPRODUCTION FAIL'
-        if pymol :
+        if pymol:
             wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, grid, center)
 
         print('Test 2: Small (One Block)')
         test_name = 'small'
         image = wrapper_small.run(ligand_rdmol, protein_rdmol, center, radii=1.5)
-        if pymol :
+        if pymol:
             wrapper_small.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
         print('Test 3: High Resolution')
         test_name = 'hr'
         image = wrapper_hr.run(ligand_rdmol, protein_rdmol, center, radii=1.5)
-        if pymol :
+        if pymol:
             wrapper_hr.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
         print('Test 4: Radii Type: Channel-Wise')
         test_name = 'channel-wise'
         voxelizer.radii_type = 'channel-wise'
-        image = wrapper.run(ligand_rdmol, protein_rdmol, center, channel_radii, out_grid = grid)
-        if pymol :
+        image = wrapper.run(ligand_rdmol, protein_rdmol, center, channel_radii, out_grid=grid)
+        if pymol:
             wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
         print('Test 5: Radii Type: Atom-Wise')
         test_name = 'atom-wise'
         voxelizer.radii_type = 'atom-wise'
-        image = wrapper.run(ligand_rdmol, protein_rdmol, center, atom_radii, out_grid = grid)
-        if pymol :
+        image = wrapper.run(ligand_rdmol, protein_rdmol, center, atom_radii, out_grid=grid)
+        if pymol:
             wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
         print('Test 6: Density: Binary')
         test_name = 'binary'
         voxelizer.density = 'binary'
         voxelizer.radii_type = 'scalar'
-        image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.5, out_grid = grid)
-        if pymol :
+        image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.5, out_grid=grid)
+        if pymol:
             wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
         print('Test 7: Random Transform')
@@ -89,8 +90,8 @@ def main(Voxelizer, RandomTransform, pymol, device) :
         T = transform.get_transform()
         new_ligand_coords, new_protein_coords = T(ligand_coords, center), T(protein_coords, center)
         ligand_rdmol, protein_rdmol = apply_coord(ligand_rdmol, new_ligand_coords), apply_coord(protein_rdmol, new_protein_coords)
-        image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.5, out_grid = grid)
-        if pymol :
+        image = wrapper.run(ligand_rdmol, protein_rdmol, center, radii=1.5, out_grid=grid)
+        if pymol:
             wrapper.visualize(f'{save_dir}/{test_name}.pse', ligand_rdmol, protein_rdmol, image, center)
 
     """ LOAD DATA """
@@ -121,12 +122,14 @@ def main(Voxelizer, RandomTransform, pymol, device) :
     print('# Test Atom Feature #')
     save_dir = 'result_feature'
     channels = ['C', 'N', 'O', 'S', 'Aromatic']
-    def get_features(atom) :
+
+    def get_features(atom):
         symbol_dict = {'C': 0, 'N': 1, 'O': 2, 'S': 3}
         res = [0] * 5
         symbol = atom.GetSymbol()
         res[symbol_dict[symbol]] = 1
-        if atom.GetIsAromatic() : res[4] = 1
+        if atom.GetIsAromatic():
+            res[4] = 1
         return res
 
     atom_getter = AtomFeatureGetter(get_features, channels)
@@ -138,19 +141,20 @@ def main(Voxelizer, RandomTransform, pymol, device) :
 
     num_atoms = ligand_rdmol.GetNumAtoms() + protein_rdmol.GetNumAtoms() + protein_rdmol.GetNumBonds()
     atom_radii = np.ones((num_atoms,))
-    atom_radii[ -protein_rdmol.GetNumBonds() : ] = 2.0
+    atom_radii[-protein_rdmol.GetNumBonds():] = 2.0
 
     test(pointcloudmaker, ligand_rdmol, protein_rdmol, channel_radii, atom_radii, save_dir)
 
-if __name__ == '__main__' :
-    if '-y' in sys.argv :
+
+if __name__ == '__main__':
+    if '-y' in sys.argv:
         pymol = True
-    else :
+    else:
         pymol = False
 
-    if '-g' in sys.argv :
+    if '-g' in sys.argv:
         device = 'cuda'
-    else :
+    else:
         device = 'cpu'
 
     from molvoxel.voxelizer.torch import Voxelizer, RandomTransform
