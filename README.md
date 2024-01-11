@@ -8,6 +8,8 @@ MolVoxel is an Easy-to-Use **Molecular Voxelization Tool** implemented in Python
 
 It requires minimal dependencies, so it's very simple to install and use. If you want to use numba version, just install numba additionally.
 
+If there's a feature you need, let me know! I'll do my best to add it.
+
 ### Dependencies
 
 - Required
