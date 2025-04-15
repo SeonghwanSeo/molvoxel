@@ -1,4 +1,3 @@
-from rdkit import Chem
 from rdkit.Chem import BondType
 
 from typing import Sequence, Optional

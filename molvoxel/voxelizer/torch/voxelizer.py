@@ -191,7 +191,7 @@ class Voxelizer(BaseVoxelizer):
         assert features.shape[0] == V, f'atom features does not match number of atoms: {features.shape[0]} vs {V}'
         assert features.ndim == 2, f"atom features does not match dimension: {features.shape} vs {(V,'*')}"
         if self.is_radii_type_scalar:
-            assert np.isscalar(radii), f'the radii type of voxelizer is `scalar`, radii should be scalar'
+            assert np.isscalar(radii), 'the radii type of voxelizer is `scalar`, radii should be scalar'
         elif self.is_radii_type_channel_wise:
             assert not np.isscalar(radii), f'the radii type of voxelizer is `channel-wise`, radii should be Tensor[{C},]'
             assert radii.shape == (C,), f'radii does not match dimension (number of channels,): {radii.shape} vs {(C,)}'
@@ -326,7 +326,7 @@ class Voxelizer(BaseVoxelizer):
         D = H = W = self.dimension
         assert types.shape == (V,), f"types does not match dimension: {types.shape} vs {(V,)}"
         if self.is_radii_type_scalar:
-            assert np.isscalar(radii), f'the radii type of voxelizer is `scalar`, radii should be scalar'
+            assert np.isscalar(radii), 'the radii type of voxelizer is `scalar`, radii should be scalar'
         elif self.is_radii_type_channel_wise:
             assert not np.isscalar(radii), f'the radii type of voxelizer is `channel-wise`, radii should be Tensor[{C},]'
             assert radii.shape == (C,), f'radii does not match dimension (number of channels,): {radii.shape} vs {(C,)}'
@@ -435,7 +435,7 @@ class Voxelizer(BaseVoxelizer):
         D = H = W = self.dimension
         assert not self.is_radii_type_channel_wise, 'Channel-Wise Radii Type is not supported'
         if self.is_radii_type_scalar:
-            assert np.isscalar(radii), f'the radii type of voxelizer is `scalar`, radii should be scalar'
+            assert np.isscalar(radii), 'the radii type of voxelizer is `scalar`, radii should be scalar'
         else:
             assert not np.isscalar(radii), f'the radii type of voxelizer is `atom-wise`, radii should be Tensor[{V},]'
             assert radii.shape == (V,), f'radii does not match dimension (number of atoms,): {radii.shape} vs {(V,)}'

@@ -9,15 +9,15 @@ from .transform import BaseRandomTransform
 class BaseVoxelizer(metaclass=ABCMeta):
     LIB = None
     transform_class: Type[BaseRandomTransform] = BaseRandomTransform
-    RADII_TYPE_LIST = ['scalar', 'channel-wise', 'atom-wise']
-    DENSITY_TYPE_LIST = ['gaussian', 'binary']
+    RADII_TYPE_LIST = ["scalar", "channel-wise", "atom-wise"]
+    DENSITY_TYPE_LIST = ["gaussian", "binary", "point"]
 
     def __init__(
         self,
         resolution: float = 0.5,
         dimension: int = 48,
-        radii_type: str = 'scalar',
-        density_type: str = 'gaussian',
+        radii_type: str = "scalar",
+        density_type: str = "gaussian",
         **kwargs
     ):
         assert radii_type in self.RADII_TYPE_LIST
@@ -30,12 +30,16 @@ class BaseVoxelizer(metaclass=ABCMeta):
         self._radii_type: str = radii_type
         self._density_type: str = density_type
 
-        self.upper_bound: float = self.width / 2.
+        self.upper_bound: float = self.width / 2.0
         self.lower_bound: float = -1 * self.upper_bound
-        self._spatial_dimension: Tuple[int, int, int] = (self._dimension, self._dimension, self._dimension)
+        self._spatial_dimension: Tuple[int, int, int] = (
+            self._dimension,
+            self._dimension,
+            self._dimension,
+        )
 
-        if self._density_type == 'gaussian':
-            self._sigma: float = kwargs.get('sigma', 0.5)
+        if self._density_type == "gaussian":
+            self._sigma: float = kwargs.get("sigma", 0.5)
 
     @property
     def radii_type(self) -> str:
@@ -48,15 +52,15 @@ class BaseVoxelizer(metaclass=ABCMeta):
 
     @property
     def is_radii_type_scalar(self):
-        return self._radii_type == 'scalar'
+        return self._radii_type == "scalar"
 
     @property
     def is_radii_type_channel_wise(self):
-        return self._radii_type == 'channel-wise'
+        return self._radii_type == "channel-wise"
 
     @property
     def is_radii_type_atom_wise(self):
-        return self._radii_type == 'atom-wise'
+        return self._radii_type == "atom-wise"
 
     @property
     def density_type(self) -> str:
@@ -66,16 +70,16 @@ class BaseVoxelizer(metaclass=ABCMeta):
     def density_type(self, density_type: str, **kwargs):
         assert density_type in self.DENSITY_TYPE_LIST
         self._density_type = density_type
-        if density_type == 'gaussian':
-            self._sigma = kwargs.get('sigma', 0.5)
+        if density_type == "gaussian":
+            self._sigma = kwargs.get("sigma", 0.5)
 
     @property
     def is_density_type_binary(self):
-        return self._density_type == 'binary'
+        return self._density_type == "binary"
 
     @property
     def is_density_type_gaussian(self):
-        return self._density_type == 'gaussian'
+        return self._density_type == "gaussian"
 
     def grid_dimension(self, num_channels: int) -> Tuple[int, int, int, int]:
         return (num_channels, self._dimension, self._dimension, self._dimension)
@@ -106,7 +110,7 @@ class BaseVoxelizer(metaclass=ABCMeta):
         radii: Union[float, ArrayLike],
         random_translation: float = 0.0,
         random_rotation: bool = False,
-        out_grid: Optional[ArrayLike] = None
+        out_grid: Optional[ArrayLike] = None,
     ) -> ArrayLike:
         """
         coords: (V, 3)
@@ -119,13 +123,31 @@ class BaseVoxelizer(metaclass=ABCMeta):
         out_grid: (C,D,H,W)
         """
         if channels is None:
-            return self.forward_single(coords, center, radii, random_translation, random_rotation, out_grid)
+            return self.forward_single(
+                coords, center, radii, random_translation, random_rotation, out_grid
+            )
         elif np.ndim(channels) == 1:
             types = channels
-            return self.forward_types(coords, center, types, radii, random_translation, random_rotation, out_grid)
+            return self.forward_types(
+                coords,
+                center,
+                types,
+                radii,
+                random_translation,
+                random_rotation,
+                out_grid,
+            )
         else:
             features = channels
-            return self.forward_features(coords, center, features, radii, random_translation, random_rotation, out_grid)
+            return self.forward_features(
+                coords,
+                center,
+                features,
+                radii,
+                random_translation,
+                random_rotation,
+                out_grid,
+            )
 
     __call__ = forward
 
@@ -138,7 +160,7 @@ class BaseVoxelizer(metaclass=ABCMeta):
         radii: Union[float, ArrayLike],
         random_translation: float = 0.0,
         random_rotation: bool = False,
-        out_grid: Optional[ArrayLike] = None
+        out_grid: Optional[ArrayLike] = None,
     ) -> ArrayLike:
         pass
 
@@ -151,7 +173,7 @@ class BaseVoxelizer(metaclass=ABCMeta):
         radii: Union[float, ArrayLike],
         random_translation: float = 0.0,
         random_rotation: bool = False,
-        out_grid: Optional[ArrayLike] = None
+        out_grid: Optional[ArrayLike] = None,
     ) -> ArrayLike:
         pass
 
@@ -163,12 +185,17 @@ class BaseVoxelizer(metaclass=ABCMeta):
         radii: Union[float, ArrayLike],
         random_translation: float = 0.0,
         random_rotation: bool = False,
-        out_grid: Optional[ArrayLike] = None
+        out_grid: Optional[ArrayLike] = None,
     ) -> ArrayLike:
         pass
 
     @abstractmethod
-    def get_empty_grid(self, num_channels: int, batch_size: Optional[int] = None, init_zero: bool = False) -> ArrayLike:
+    def get_empty_grid(
+        self,
+        num_channels: int,
+        batch_size: Optional[int] = None,
+        init_zero: bool = False,
+    ) -> ArrayLike:
         pass
 
     @abstractmethod

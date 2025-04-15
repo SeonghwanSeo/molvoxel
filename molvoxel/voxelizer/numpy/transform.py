@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import Tuple, Union, Optional
+from typing import Optional
 from numpy.typing import NDArray
 from ._quaternion import random_quaternion, apply_quaternion, Q
 from ..base.transform import BaseRandomTransform, BaseT

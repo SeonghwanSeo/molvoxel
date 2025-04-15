@@ -1,1 +1,1 @@
-from .visualizer import Visualizer
+from .visualizer import Visualizer  # noqa: F401

@@ -1,5 +1,3 @@
-import rdkit
-from rdkit import Chem
 import numpy as np
 
 from rdkit.Chem import Mol

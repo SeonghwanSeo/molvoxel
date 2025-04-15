@@ -201,7 +201,7 @@ class Visualizer():
                     cmd.color(molecule_grid_color_dict[key], dx)
                 dx_dict.append(dx)
             cmd.group(f'{name}Voxel', ' '.join(dx_dict))
-            cmd.group(f'Voxel', f'{name}Voxel')
+            cmd.group('Voxel', f'{name}Voxel')
 
         temp_dir.cleanup()
 
