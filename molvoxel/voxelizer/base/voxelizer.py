@@ -19,7 +19,7 @@ class BaseVoxelizer(metaclass=ABCMeta):
         dimension: int = 48,
         radii_type: str = "scalar",
         density_type: str = "gaussian",
-        **kwargs
+        **kwargs,
     ):
         assert radii_type in self.RADII_TYPE_LIST
         assert density_type in self.DENSITY_TYPE_LIST
@@ -103,14 +103,22 @@ class BaseVoxelizer(metaclass=ABCMeta):
 
     """ Forward """
 
+    @staticmethod
+    @abstractmethod
+    def do_random_transform(
+        coords: ArrayLike,
+        center: Optional[ArrayLike] = None,
+        random_translation: Optional[float] = 0.0,
+        random_rotation: bool = False,
+    ) -> ArrayLike:
+        pass
+
     def forward(
         self,
         coords: ArrayLike,
         center: Optional[ArrayLike],
         channels: Optional[ArrayLike],
         radii: Union[float, ArrayLike],
-        random_translation: float = 0.0,
-        random_rotation: bool = False,
         out_grid: Optional[ArrayLike] = None,
     ) -> ArrayLike:
         """
@@ -118,37 +126,17 @@ class BaseVoxelizer(metaclass=ABCMeta):
         center: (3,)
         types: (V, C) or (V,) or None
         radii: scalar or (V, ) of (C, )
-        random_translation: float (nonnegative)
-        random_rotation: bool
 
         out_grid: (C,D,H,W)
         """
         if channels is None:
-            return self.forward_single(
-                coords, center, radii, random_translation, random_rotation, out_grid
-            )
+            return self.forward_single(coords, center, radii, out_grid)
         elif np.ndim(channels) == 1:
             types = channels
-            return self.forward_types(
-                coords,
-                center,
-                types,
-                radii,
-                random_translation,
-                random_rotation,
-                out_grid,
-            )
+            return self.forward_types(coords, center, types, radii, out_grid)
         else:
             features = channels
-            return self.forward_features(
-                coords,
-                center,
-                features,
-                radii,
-                random_translation,
-                random_rotation,
-                out_grid,
-            )
+            return self.forward_features(coords, center, features, radii, out_grid)
 
     __call__ = forward
 
@@ -159,8 +147,6 @@ class BaseVoxelizer(metaclass=ABCMeta):
         center: Optional[ArrayLike],
         types: ArrayLike,
         radii: Union[float, ArrayLike],
-        random_translation: float = 0.0,
-        random_rotation: bool = False,
         out_grid: Optional[ArrayLike] = None,
     ) -> ArrayLike:
         pass
@@ -172,8 +158,6 @@ class BaseVoxelizer(metaclass=ABCMeta):
         center: Optional[ArrayLike],
         features: ArrayLike,
         radii: Union[float, ArrayLike],
-        random_translation: float = 0.0,
-        random_rotation: bool = False,
         out_grid: Optional[ArrayLike] = None,
     ) -> ArrayLike:
         pass
@@ -184,8 +168,6 @@ class BaseVoxelizer(metaclass=ABCMeta):
         coords: ArrayLike,
         center: Optional[ArrayLike],
         radii: Union[float, ArrayLike],
-        random_translation: float = 0.0,
-        random_rotation: bool = False,
         out_grid: Optional[ArrayLike] = None,
     ) -> ArrayLike:
         pass

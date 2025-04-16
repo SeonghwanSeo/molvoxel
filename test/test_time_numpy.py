@@ -6,10 +6,11 @@ from rdkit import Chem
 from molvoxel.etc.rdkit.getter import AtomTypeGetter, BondTypeGetter
 from molvoxel.etc.rdkit.pointcloud import MolSystemPointCloudMaker
 from molvoxel.etc.rdkit.wrapper import ComplexWrapper
+from molvoxel.voxelizer import BaseVoxelizer
 
 
 def run_test(
-    voxelizer,
+    voxelizer: BaseVoxelizer,
     grid,
     coords,
     center,
@@ -20,19 +21,18 @@ def run_test(
 ):
     batch_size = grid.shape[0]
     for i in range(batch_size):
+        coords = voxelizer.do_random_transform(coords, center, random_translation, random_rotation)
         voxelizer.forward(
             coords,
             center,
             channels,
             radii,
-            random_translation,
-            random_rotation,
             out_grid=grid[i],
         )
     return grid
 
 
-def main(voxelizer):
+def main(voxelizer: BaseVoxelizer):
     batch_size = 16
     num_iteration = 25
     num_trial = 5
@@ -103,12 +103,8 @@ def main(voxelizer):
         type_out = np.array(type_out)
         feature_out = np.array(feature_out)
         assert np.less(np.abs(type_out - type_out[0]), 1e-5).all(), "REPRODUCTION FAIL"
-        assert np.less(
-            np.abs(feature_out - feature_out[0]), 1e-5
-        ).all(), "REPRODUCTION FAIL"
-        assert np.less(
-            np.abs(type_out[0] - feature_out[0]), 1e-5
-        ).all(), "REPRODUCTION FAIL"
+        assert np.less(np.abs(feature_out - feature_out[0]), 1e-5).all(), "REPRODUCTION FAIL"
+        assert np.less(np.abs(type_out[0] - feature_out[0]), 1e-5).all(), "REPRODUCTION FAIL"
     print("PASS\n")
 
     """ ATOM TYPE """
@@ -124,9 +120,7 @@ def main(voxelizer):
         print(f"time per run {(end-st) / batch_size / num_iteration}")
         print()
     end_tot = time.time()
-    print(
-        f"times per run {(end_tot-st_tot) / batch_size / num_iteration / num_trial}\n"
-    )
+    print(f"times per run {(end_tot-st_tot) / batch_size / num_iteration / num_trial}\n")
 
     """ ATOM TYPE """
     print("Test Atom Type")
@@ -141,9 +135,7 @@ def main(voxelizer):
         print(f"time per run {(end-st) / batch_size / num_iteration}")
         print()
     end_tot = time.time()
-    print(
-        f"times per run {(end_tot-st_tot) / batch_size / num_iteration / num_trial}\n"
-    )
+    print(f"times per run {(end_tot-st_tot) / batch_size / num_iteration / num_trial}\n")
 
     """ ATOM FEATURE """
     print("Test Atom Feature")

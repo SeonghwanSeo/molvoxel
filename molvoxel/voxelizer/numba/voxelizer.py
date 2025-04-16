@@ -71,24 +71,31 @@ class Voxelizer(BaseVoxelizer):
 
     """ Forward """
 
+    @staticmethod
+    def do_random_transform(
+        coords: NDArrayFloat,
+        center: Optional[NDArrayFloat] = None,
+        random_translation: Optional[float] = 0.0,
+        random_rotation: bool = False,
+    ) -> NDArray:
+        return do_random_transform(coords, center, random_translation, random_rotation)
+
     def forward(
         self,
         coords: NDArrayFloat,
         center: Optional[NDArrayFloat],
         channels: Union[None, NDArrayFloat, NDArrayInt],
         radii: Union[float, NDArrayFloat],
-        random_translation: float = 0.0,
-        random_rotation: bool = False,
         out_grid: Optional[NDArrayFloat] = None,
     ) -> NDArrayFloat:
         if channels is None:
-            return self.forward_single(coords, center, radii, random_translation, random_rotation, out_grid)
+            return self.forward_single(coords, center, radii, out_grid)
         elif channels.ndim == 1:
             types = channels
-            return self.forward_types(coords, center, types, radii, random_translation, random_rotation, out_grid)
+            return self.forward_types(coords, center, types, radii, out_grid)
         else:
             features = channels
-            return self.forward_features(coords, center, features, radii, random_translation, random_rotation, out_grid)
+            return self.forward_features(coords, center, features, radii, out_grid)
 
     __call__ = forward
 
@@ -100,8 +107,6 @@ class Voxelizer(BaseVoxelizer):
         center: Optional[NDArrayFloat],
         features: NDArrayFloat,
         radii: Union[float, NDArrayFloat],
-        random_translation: float = 0.0,
-        random_rotation: bool = False,
         out_grid: Optional[NDArrayFloat] = None,
     ) -> NDArrayFloat:
         """
@@ -109,8 +114,6 @@ class Voxelizer(BaseVoxelizer):
         center: (3,)
         features: (V, C)
         radii: scalar or (V, ) of (C, )
-        random_translation: float (nonnegative)
-        random_rotation: bool
 
         out_grid: (C,D,H,W)
         """
@@ -119,7 +122,6 @@ class Voxelizer(BaseVoxelizer):
         # Set Coordinate
         if center is not None:
             coords = coords - center.reshape(1, 3)
-        coords = do_random_transform(coords, None, random_translation, random_rotation)
 
         # DataType
         coords = self._dtypechange(coords, self.fp)
@@ -231,8 +233,6 @@ class Voxelizer(BaseVoxelizer):
         center: Optional[NDArrayFloat],
         types: NDArrayInt,
         radii: Union[float, NDArrayFloat],
-        random_translation: float = 0.0,
-        random_rotation: bool = False,
         out_grid: Optional[NDArrayFloat] = None,
     ) -> NDArrayFloat:
         """
@@ -240,8 +240,6 @@ class Voxelizer(BaseVoxelizer):
         center: (3,)
         types: (V,)
         radii: scalar or (V, ) of (C, )
-        random_translation: float (nonnegative)
-        random_rotation: bool
 
         out_grid: (C,D,H,W)
         """
@@ -250,7 +248,6 @@ class Voxelizer(BaseVoxelizer):
         # Set Coordinate
         if center is not None:
             coords = coords - center.reshape(1, 3)
-        coords = self.do_random_transform(coords, None, random_translation, random_rotation)
 
         # DataType
         coords = self._dtypechange(coords, self.fp)
@@ -368,16 +365,12 @@ class Voxelizer(BaseVoxelizer):
         coords: NDArrayFloat,
         center: Optional[NDArrayFloat],
         radii: Union[float, NDArrayFloat],
-        random_translation: float = 0.0,
-        random_rotation: bool = False,
         out_grid: Optional[NDArrayFloat] = None,
     ) -> NDArrayFloat:
         """
         coords: (V, 3)
         center: (3,)
         radii: scalar or (V, )
-        random_translation: float (nonnegative)
-        random_rotation: bool
 
         out_grid: (1,D,H,W)
         """
@@ -386,7 +379,6 @@ class Voxelizer(BaseVoxelizer):
         # Set Coordinate
         if center is not None:
             coords = coords - center.reshape(1, 3)
-        coords = self.do_random_transform(coords, None, random_translation, random_rotation)
 
         # DataType
         coords = self._dtypechange(coords, np.float64)
@@ -546,7 +538,3 @@ class Voxelizer(BaseVoxelizer):
         elif obj == "types":
             return self._asarray(array, np.int16)
         raise ValueError("obj should be ['coords', 'center', 'radii', types', 'features']")
-
-    @staticmethod
-    def do_random_transform(coords, center, random_translation, random_rotation):
-        return do_random_transform(coords, center, random_translation, random_rotation)

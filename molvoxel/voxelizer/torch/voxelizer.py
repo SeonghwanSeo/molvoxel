@@ -92,24 +92,31 @@ class Voxelizer(BaseVoxelizer):
 
     """ Forward """
 
+    @staticmethod
+    def do_random_transform(
+        coords: FloatTensor,
+        center: Optional[FloatTensor] = None,
+        random_translation: Optional[float] = 0.0,
+        random_rotation: bool = False,
+    ) -> FloatTensor:
+        return do_random_transform(coords, center, random_translation, random_rotation)
+
     def forward(
         self,
         coords: FloatTensor,
         center: Optional[FloatTensor],
         channels: Union[FloatTensor, LongTensor, None],
         radii: Union[float, FloatTensor],
-        random_translation: float = 0.0,
-        random_rotation: bool = False,
         out_grid: Optional[FloatTensor] = None,
     ) -> FloatTensor:
         if channels is None:
-            return self.forward_single(coords, center, radii, random_translation, random_rotation, out_grid)
+            return self.forward_single(coords, center, radii, out_grid)
         elif channels.dim() == 1:
             types = channels
-            return self.forward_types(coords, center, types, radii, random_translation, random_rotation, out_grid)
+            return self.forward_types(coords, center, types, radii, out_grid)
         else:
             features = channels
-            return self.forward_features(coords, center, features, radii, random_translation, random_rotation, out_grid)
+            return self.forward_features(coords, center, features, radii, out_grid)
 
     __call__ = forward
 
@@ -122,8 +129,6 @@ class Voxelizer(BaseVoxelizer):
         center: Optional[FloatTensor],
         features: FloatTensor,
         radii: Union[float, FloatTensor],
-        random_translation: float = 0.0,
-        random_rotation: bool = False,
         out_grid: Optional[FloatTensor] = None,
     ) -> FloatTensor:
         """unsqueeze
@@ -131,8 +136,6 @@ class Voxelizer(BaseVoxelizer):
         center: (3,)
         features: (V, C)
         radii: scalar or (V, ) of (C, )
-        random_translation: float (nonnegative)
-        random_rotation: bool
 
         out_grid: (C,D,H,W)
         """
@@ -146,7 +149,6 @@ class Voxelizer(BaseVoxelizer):
         # Set Coordinate
         if center is not None:
             coords = coords - center.view(1, 3)
-        coords = do_random_transform(coords, None, random_translation, random_rotation)
 
         # Set Out
         if out_grid is None:
@@ -262,8 +264,6 @@ class Voxelizer(BaseVoxelizer):
         center: Optional[FloatTensor],
         types: FloatTensor,
         radii: Union[float, FloatTensor],
-        random_translation: float = 0.0,
-        random_rotation: bool = False,
         out_grid: Optional[FloatTensor] = None,
     ) -> FloatTensor:
         """
@@ -271,8 +271,6 @@ class Voxelizer(BaseVoxelizer):
         center: (3,)
         types: (V,)
         radii: scalar or (V, ) of (C, )
-        random_translation: float (nonnegative)
-        random_rotation: bool
 
         out_grid: (C,D,H,W)
         """
@@ -286,7 +284,6 @@ class Voxelizer(BaseVoxelizer):
         # Set Coordinate
         if center is not None:
             coords = coords - center.view(1, 3)
-        coords = do_random_transform(coords, None, random_translation, random_rotation)
 
         # Set Out
         if out_grid is None:
@@ -392,16 +389,12 @@ class Voxelizer(BaseVoxelizer):
         coords: FloatTensor,
         center: Optional[FloatTensor],
         radii: Union[float, FloatTensor],
-        random_translation: float = 0.0,
-        random_rotation: bool = False,
         out_grid: Optional[FloatTensor] = None,
     ) -> FloatTensor:
         """
         coords: (V, 3)
         center: (3,)
         radii: scalar or (V, )
-        random_translation: float (nonnegative)
-        random_rotation: bool
 
         out_grid: (C,D,H,W)
         """
@@ -414,7 +407,6 @@ class Voxelizer(BaseVoxelizer):
         # Set Coordinate
         if center is not None:
             coords = coords - center.view(1, 3)
-        coords = do_random_transform(coords, None, random_translation, random_rotation)
 
         # Set Out
         if out_grid is None:
@@ -589,7 +581,3 @@ class Voxelizer(BaseVoxelizer):
             elif obj == "types":
                 return torch.tensor(array, dtype=torch.long, device=self.device)
         raise ValueError("obj should be ['coords', center', 'types', 'features', 'radii']")
-
-    @staticmethod
-    def do_random_transform(coords, center, random_translation, random_rotation):
-        return do_random_transform(coords, center, random_translation, random_rotation)

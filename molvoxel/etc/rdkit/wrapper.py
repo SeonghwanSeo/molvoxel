@@ -122,9 +122,8 @@ class MolSystemWrapper(MolWrapper):
         center = voxelizer.asarray(center, "center") if center is not None else center
         channels = voxelizer.asarray(channels, maker.channel_type)
         radii = radii if np.isscalar(radii) else voxelizer.asarray(radii, "radii")
-        return voxelizer.forward(
-            coords, center, channels, radii, random_translation, random_rotation, out_grid=out_grid
-        )
+        coords = voxelizer.do_random_transform(coords, center, random_translation, random_rotation)
+        return voxelizer.forward(coords, center, channels, radii, out_grid)
 
     def get_coords(self, rdmol_list):
         coords = self.maker.get_coords(rdmol_list)
