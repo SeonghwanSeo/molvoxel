@@ -1,6 +1,8 @@
+import math
+
 import numba as nb
 import numpy as np
-import math
+
 
 @nb.njit()
 def binary_scalar_radii(coords, features, axis_x, axis_y, axis_z, radii, out):

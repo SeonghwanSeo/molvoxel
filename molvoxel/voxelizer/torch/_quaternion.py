@@ -1,9 +1,9 @@
 import math
+from typing import Tuple, Union
+
 import numpy as np
 import torch
 from torch import FloatTensor
-
-from typing import Tuple, Union
 
 # https://en.wikipedia.org/wiki/Quaternions_and_spatial_rotation
 

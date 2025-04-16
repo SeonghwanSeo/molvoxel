@@ -1,4 +1,5 @@
-from typing import Any, List, Callable
+from typing import Any, Callable, List
+
 from numpy.typing import ArrayLike
 
 

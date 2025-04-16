@@ -1,7 +1,7 @@
 import math
-import numpy as np
-
 from typing import Tuple, Union
+
+import numpy as np
 from numpy.typing import NDArray
 
 # https://en.wikipedia.org/wiki/Quaternions_and_spatial_rotation

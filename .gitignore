@@ -5,6 +5,7 @@ __pycache__/
 .DS_store
 test/result*
 molvoxel/voxelizer/jax/
+pyproject.toml
 
 # C extensions
 *.so

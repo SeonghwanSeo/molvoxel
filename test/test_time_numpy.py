@@ -1,9 +1,11 @@
+import time
+
 import numpy as np
 from rdkit import Chem
-from molvoxel.etc.rdkit.wrapper import ComplexWrapper
-from molvoxel.etc.rdkit.pointcloud import MolSystemPointCloudMaker
+
 from molvoxel.etc.rdkit.getter import AtomTypeGetter, BondTypeGetter
-import time
+from molvoxel.etc.rdkit.pointcloud import MolSystemPointCloudMaker
+from molvoxel.etc.rdkit.wrapper import ComplexWrapper
 
 
 def run_test(

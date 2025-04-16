@@ -16,18 +16,14 @@ def write_grid_to_dx_file(dx_path, values, center, resolution):
              (center_z - resolution * (size_z - 1) / 2.)
 
     lines = [
-        'object 1 class gridpositions counts {:d} {:d} {:d}\n'.format(
-            size_x, size_y, size_z
-        ),
+        f'object 1 class gridpositions counts {size_x:d} {size_y:d} {size_z:d}\n',
         'origin {:.5f} {:.5f} {:.5f}\n'.format(*origin),
-        'delta {:.5f} 0 0\n'.format(resolution),
-        'delta 0 {:.5f} 0\n'.format(resolution),
-        'delta 0 0 {:.5f}\n'.format(resolution),
-        'object 2 class gridconnections counts {:d} {:d} {:d}\n'.format(
-            size_x, size_y, size_z
-        ),
+        f'delta {resolution:.5f} 0 0\n',
+        f'delta 0 {resolution:.5f} 0\n',
+        f'delta 0 0 {resolution:.5f}\n',
+        f'object 2 class gridconnections counts {size_x:d} {size_y:d} {size_z:d}\n',
         'object 3 class array type double rank 0 items '
-        + '[ {:d} ] data follows\n'.format(size_x * size_y * size_z),
+        + f'[ {size_x * size_y * size_z:d} ] data follows\n',
     ]
     line = ''
     values = values.reshape(-1).tolist()

@@ -1,8 +1,9 @@
 from test_time_numpy import main
 
 if __name__ == '__main__':
-    from molvoxel.voxelizer.torch import Voxelizer
     import sys
+
+    from molvoxel.voxelizer.torch import Voxelizer
     if '-g' in sys.argv:
         device = 'cuda'
     else:

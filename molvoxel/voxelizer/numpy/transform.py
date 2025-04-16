@@ -1,9 +1,10 @@
-import numpy as np
-
 from typing import Optional
+
+import numpy as np
 from numpy.typing import NDArray
-from ._quaternion import random_quaternion, apply_quaternion, Q
+
 from ..base.transform import BaseRandomTransform, BaseT
+from ._quaternion import Q, apply_quaternion, random_quaternion
 
 NDArrayFloat = NDArray[np.float_]
 

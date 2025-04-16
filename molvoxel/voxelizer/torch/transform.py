@@ -1,9 +1,10 @@
+from typing import Optional
+
 import torch
 from torch import FloatTensor
 
-from typing import Optional
-from ._quaternion import random_quaternion, apply_quaternion, Q
 from ..base.transform import BaseRandomTransform, BaseT
+from ._quaternion import Q, apply_quaternion, random_quaternion
 
 
 class T(BaseT):

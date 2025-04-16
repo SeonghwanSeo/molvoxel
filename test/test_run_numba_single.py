@@ -1,4 +1,5 @@
 import sys
+
 from test_run_numpy_single import main
 
 if __name__ == '__main__':
@@ -7,5 +8,5 @@ if __name__ == '__main__':
     else:
         pymol = False
 
-    from molvoxel.voxelizer.numba import Voxelizer, RandomTransform
+    from molvoxel.voxelizer.numba import RandomTransform, Voxelizer
     main(Voxelizer, RandomTransform, pymol)

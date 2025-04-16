@@ -1,4 +1,4 @@
-from .base import BaseVoxelizer, BaseRandomTransform
+from .base import BaseRandomTransform, BaseVoxelizer
 
 
 def create_random_transform(
