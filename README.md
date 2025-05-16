@@ -21,13 +21,13 @@ If there's a feature you need, let me know! I'll do my best to add it.
 
 ### Citation
 
-```
-@article{seo2023pharmaconet,
-  title = {PharmacoNet: Accelerating Large-Scale Virtual Screening by Deep Pharmacophore Modeling},
-  author = {Seo, Seonghwan and Kim, Woo Youn},
-  journal = {arXiv preprint arXiv:2310.00681},
-  year = {2023},
-  url = {https://arxiv.org/abs/2310.00681},
+```bibtex
+@article{seo2024pharmaconet,
+  title={PharmacoNet: deep learning-guided pharmacophore modeling for ultra-large-scale virtual screening},
+  author={Seo, Seonghwan and Kim, Woo Youn},
+  journal={Chemical Science},
+  year={2024},
+  publisher={Royal Society of Chemistry}
 }
 ```
 
