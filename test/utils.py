@@ -1,6 +1,6 @@
+from numpy.typing import ArrayLike
 from rdkit import Chem
 from rdkit.Chem import Mol
-from numpy.typing import ArrayLike
 
 
 def apply_coord(rdmol: Mol, coords: ArrayLike) -> Mol:

@@ -1,16 +1,12 @@
 import math
+
 import numpy as np
 import torch
 from torch import FloatTensor
 
-from typing import Tuple, Union
-
 # https://en.wikipedia.org/wiki/Quaternions_and_spatial_rotation
 
-Q = Union[
-    Tuple[float, float, float, float],
-    Tuple[FloatTensor, FloatTensor, FloatTensor, FloatTensor]
-]
+Q = tuple[float, float, float, float] | tuple[FloatTensor, FloatTensor, FloatTensor, FloatTensor]
 
 pi2 = 2 * math.pi
 

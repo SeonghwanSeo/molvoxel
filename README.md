@@ -31,18 +31,17 @@ If there's a feature you need, let me know! I'll do my best to add it.
 }
 ```
 
-
-
 ## Quick Start
 
 ### Installation
 
 ```shell
 pip install molvoxel
-pip install molvoxel[numba, torch, rdkit]	# Optional Dependencies
+pip install molvoxel[numba, torch, rdkit] # Optional Dependencies
 ```
 
 ### Configuring Voxelizer Object
+
 ```python
 import molvoxel
 # Default (Resolution: 0.5, dimension: 64, density_type: gaussian, sigma: 0.5, library='numpy')
@@ -56,6 +55,7 @@ voxelizer = molvoxel.create_voxelizer(library='torch', device='cuda')
 ```
 
 ### Voxelization
+
 #### Numpy, Numba
 
 ```python
@@ -96,8 +96,6 @@ image = voxelizer.forward_types(coords, center, atom_types, atom_radius)        
 image = voxelizer.forward_features(coords, center, atom_features, atom_radius)  # (5, 32, 32, 32)
 ```
 
-
-
 ## Voxelization
 
 ### Input
@@ -117,11 +115,11 @@ $\sigma$: gaussian sigma (default=0.5)
 $$
 f(d, r, \sigma) =
 \begin{cases}
-	\exp
-		\left(
-			-0.5(\frac{d/r}{\sigma})^2
-		\right)	& \text{if}~d \leq r \\
-	0					& \text{else}
+ \exp
+  \left(
+   -0.5(\frac{d/r}{\sigma})^2
+  \right) & \text{if}~d \leq r \\
+ 0     & \text{else}
 \end{cases}
 $$
 
@@ -130,8 +128,8 @@ $$
 $$
 f(d, r) =
 \begin{cases}
-	1	& \text{if}~d \leq r \\
-	0	& \text{else}
+ 1 & \text{if}~d \leq r \\
+ 0 & \text{else}
 \end{cases}
 $$
 
@@ -144,18 +142,15 @@ $$
 I_{d,h,w,:} = \sum_{n}^{N} F_n \times f(||X_n - G_{d,h,w}||,R_n,\sigma)
 $$
 
-
-
 ## RDKit Wrapper
 
-``` python
+```python
 # RDKit is required
 from molvoxel.rdkit import AtomTypeGetter, BondTypeGetter, MolPointCloudMaker, MolWrapper
 atom_getter = AtomTypeGetter(['C', 'N', 'O', 'S'])
-bond_getter = BondTypeGetter.default()		# (SINGLE, DOUBLE, TRIPLE, AROMATIC)
+bond_getter = BondTypeGetter.default()  # (SINGLE, DOUBLE, TRIPLE, AROMATIC)
 
 pointcloudmaker = MolPointCloudMaker(atom_getter, bond_getter, channel_type='types')
 wrapper = MolWrapper(pointcloudmaker, voxelizer, visualizer)
 image = wrapper.run(rdmol, center, radii=1.0)
 ```
-

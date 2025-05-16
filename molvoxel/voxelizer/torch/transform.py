@@ -1,13 +1,13 @@
 import torch
 from torch import FloatTensor
 
-from typing import Optional
-from ._quaternion import random_quaternion, apply_quaternion, Q
-from ..base.transform import BaseRandomTransform, BaseT
+from molvoxel.voxelizer.base.transform import BaseRandomTransform, BaseT
+
+from ._quaternion import Q, apply_quaternion, random_quaternion
 
 
 class T(BaseT):
-    def __init__(self, translation: Optional[FloatTensor], quaternion: Optional[Q]):
+    def __init__(self, translation: FloatTensor | None, quaternion: Q | None):
         self.translation = translation
         self.quaternion = quaternion
 
@@ -34,15 +34,15 @@ class T(BaseT):
 class RandomTransform(BaseRandomTransform):
     class_T = T
 
-    def forward(self, coords: FloatTensor, center: Optional[FloatTensor]) -> FloatTensor:
+    def forward(self, coords: FloatTensor, center: FloatTensor | None) -> FloatTensor:
         return do_random_transform(coords, center, self.random_translation, self.random_rotation)
 
 
 def do_transform(
     coords: FloatTensor,
-    center: Optional[FloatTensor] = None,
-    translation: Optional[FloatTensor] = None,
-    quaternion: Optional[Q] = None,
+    center: FloatTensor | None = None,
+    translation: FloatTensor | None = None,
+    quaternion: Q | None = None,
 ) -> FloatTensor:
     device = coords.device
     if quaternion is not None:
@@ -63,8 +63,8 @@ def do_transform(
 
 def do_random_transform(
     coords: FloatTensor,
-    center: Optional[FloatTensor] = None,
-    random_translation: Optional[float] = 0.0,
+    center: FloatTensor | None = None,
+    random_translation: float | None = 0.0,
     random_rotation: bool = False,
 ) -> FloatTensor:
     device = coords.device

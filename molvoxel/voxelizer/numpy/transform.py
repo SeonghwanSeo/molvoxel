@@ -1,15 +1,15 @@
 import numpy as np
-
-from typing import Tuple, Union, Optional
 from numpy.typing import NDArray
-from ._quaternion import random_quaternion, apply_quaternion, Q
-from ..base.transform import BaseRandomTransform, BaseT
 
-NDArrayFloat = NDArray[np.float_]
+from molvoxel.voxelizer.base.transform import BaseRandomTransform, BaseT
+
+from ._quaternion import Q, apply_quaternion, random_quaternion
+
+NDArrayFloat = NDArray[np.float64]
 
 
 class T(BaseT):
-    def __init__(self, translation: Optional[NDArrayFloat], quaternion: Optional[Q]):
+    def __init__(self, translation: NDArrayFloat | None, quaternion: Q | None):
         self.translation = translation
         self.quaternion = quaternion
 
@@ -36,15 +36,15 @@ class T(BaseT):
 class RandomTransform(BaseRandomTransform):
     class_T = T
 
-    def forward(self, coords: NDArrayFloat, center: Optional[NDArrayFloat]) -> NDArrayFloat:
+    def forward(self, coords: NDArrayFloat, center: NDArrayFloat | None) -> NDArrayFloat:
         return do_random_transform(coords, center, self.random_translation, self.random_rotation)
 
 
 def do_transform(
     coords: NDArrayFloat,
-    center: Optional[NDArrayFloat] = None,
-    translation: Optional[NDArrayFloat] = None,
-    quaternion: Optional[Q] = None,
+    center: NDArrayFloat | None = None,
+    translation: NDArrayFloat | None = None,
+    quaternion: Q | None = None,
 ) -> NDArrayFloat:
     if quaternion is not None:
         if center is not None:
@@ -62,8 +62,8 @@ def do_transform(
 
 def do_random_transform(
     coords: NDArrayFloat,
-    center: Optional[NDArrayFloat] = None,
-    random_translation: Optional[float] = 0.0,
+    center: NDArrayFloat | None = None,
+    random_translation: float | None = 0.0,
     random_rotation: bool = False,
 ) -> NDArray:
 

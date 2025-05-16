@@ -1,6 +1,7 @@
+import math
+
 import numba as nb
 import numpy as np
-import math
 
 
 @nb.njit()
@@ -22,7 +23,7 @@ def binary_scalar_radii(coords, types, axis_x, axis_y, axis_z, radii, out):
     assert out.shape[2] == axis_y.shape[0]
     assert out.shape[3] == axis_z.shape[0]
 
-    radii_sq = radii ** 2
+    radii_sq = radii**2
     for v in range(coords.shape[0]):
         c = types[v]
         px, py, pz = coords[v, 0], coords[v, 1], coords[v, 2]
@@ -128,7 +129,7 @@ def gaussian_atom_wise_radii(coords, types, axis_x, axis_y, axis_z, radii, sigma
     assert out.shape[2] == axis_y.shape[0]
     assert out.shape[3] == axis_z.shape[0]
 
-    sigma_sq = sigma ** 2
+    sigma_sq = sigma**2
     for v in range(coords.shape[0]):
         c = types[v]
         radii_sq = radii[v] ** 2
@@ -199,7 +200,7 @@ def gaussian_channel_wise_radii(coords, types, axis_x, axis_y, axis_z, radii, si
     assert out.shape[2] == axis_y.shape[0]
     assert out.shape[3] == axis_z.shape[0]
 
-    sigma_sq = sigma ** 2
+    sigma_sq = sigma**2
     for v in range(coords.shape[0]):
         c = types[v]
         radii_sq = radii[c] ** 2

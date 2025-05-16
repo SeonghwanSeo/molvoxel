@@ -1,15 +1,11 @@
 import math
-import numpy as np
 
-from typing import Tuple, Union
+import numpy as np
 from numpy.typing import NDArray
 
 # https://en.wikipedia.org/wiki/Quaternions_and_spatial_rotation
 
-Q = Union[
-    Tuple[float, float, float, float],
-    Tuple[NDArray, NDArray, NDArray, NDArray]
-]
+Q = tuple[float, float, float, float] | tuple[NDArray, NDArray, NDArray, NDArray]
 
 pi2 = 2 * math.pi
 
